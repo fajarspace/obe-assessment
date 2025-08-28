@@ -1,0 +1,324 @@
+{
+  "program_learning_outcomes": {
+    "PL01": {
+      "id": "PL01",
+      "description": "Lulusan memiliki pengetahuan bidang computing serta menerapkan prinsip-prinsip computing dan disiplin ilmu relevan lainnya untuk mengidentifikasi solusi bagi permasalahan komputasi sesuai kebutuhan organisasi dan masyarakat",
+      "unit": "P",
+      "type": "Wajib"
+    },
+    "PL02": {
+      "id": "PL02",
+      "description": "Lulusan memiliki kemampuan mengimplementasi dan menganalisis solusi berbasis computing yang memenuhi kebutuhan computing dengan pertimbangan yang sesuai",
+      "unit": "KK",
+      "type": "Wajib"
+    },
+    "PL03": {
+      "id": "PL03",
+      "description": "Lulusan memiliki kemampuan untuk berkomunikasi secara efektif dan berkolaborasi secara efektif dalam mengembangkan solusi digital berbasis informatika",
+      "unit": "KU",
+      "type": "Pilihan"
+    },
+    "PL04": {
+      "id": "PL04",
+      "description": "Lulusan menunjukkan sikap profesional melalui kepahatan terhadap etika profesi, kemampuan bekerja sama dalam tim, serta tanggap terhadap perkembangan teknologi",
+      "unit": "S",
+      "type": "Wajib"
+    }
+  },
+  "course_learning_outcomes": {
+    "CPL01": {
+      "id": "CPL01",
+      "description": "Menunjukkan kesadaran kepada Tuhan Yang Maha Esa, atas hukum, dan disiplin dalam menjalankan tugas berdasarkan religi yang dianut",
+      "keterangan": "Berkaitan dengan Pancasila untuk SKAP yang sesuai dengan SN Dikti dan Nilai Institusi/Universitas",
+      "related_pl": ["PL04"],
+      "related_cpmk": ["CPMK-1", "CPMK-2"]
+    },
+    "CPL02": {
+      "id": "CPL02",
+      "description": "Menguasai konsep teori fondasi dan konsep teori ilmu informatika/sistem informasi dan mampu merumuskan masalah komputasi pada suatu organisasi",
+      "keterangan": "Berkaitan dengan masalah bidang informatika/komputer dengan mempertimbangkan wawasan perkembangan ilmu interdisiplin",
+      "related_pl": ["PL01"],
+      "related_cpmk": ["CPMK-3", "CPMK-4"]
+    },
+    "CPL03": {
+      "id": "CPL03",
+      "description": "Mampu menganalisis kebutuhan pengguna, merancang, mengimplementasi, dan mengevaluasi sistem untuk menyelesaikan masalah dengan metode, teknik atau algoritma yang tepat dari bidang informatika untuk mencapai tujuan organisasi",
+      "keterangan": "Wajib",
+      "related_pl": ["PL02"],
+      "related_cpmk": ["CPMK-5", "CPMK-7"]
+    },
+    "CPL05": {
+      "id": "CPL05",
+      "description": "Menguasai konsep teoretis bidang pengetahuan Ilmu Komputer/Informatika dalam mendesain dan mensimulasikan aplikasi teknologi multi-platform yang relevan dengan kebutuhan industri dan masyarakat",
+      "keterangan": "Wajib",
+      "related_pl": ["PL01", "PL02"],
+      "related_cpmk": ["CPMK-5"]
+    },
+    "CPL10": {
+      "id": "CPL10",
+      "description": "Kemampuan mendesain, mengimplementasi dan mengevaluasi solusi berbasis computing multi-platform yang memenuhi kebutuhan-kebutuhan computing pada sebuah organisasi",
+      "keterangan": "Wajib",
+      "related_pl": ["PL02"],
+      "related_cpmk": ["CPMK-22", "CPMK-23", "CPMK-24"]
+    }
+  },
+  "mata_kuliah": {
+    "PRO103": {
+      "id": "PRO103",
+      "nama": "Pendidikan Agama I",
+      "sks": 1,
+      "universitas": "Universitas",
+      "jenis": "Wajib",
+      "semester": 1,
+      "related_cpl": ["CPL01"]
+    },
+    "PRO102": {
+      "id": "PRO102",
+      "nama": "Bahasa Indonesia",
+      "sks": 2,
+      "universitas": "Universitas",
+      "jenis": "Wajib",
+      "semester": 1,
+      "related_cpl": ["CPL01"]
+    },
+    "PRO105": {
+      "id": "PRO105",
+      "nama": "Pancasila",
+      "sks": 2,
+      "universitas": "Universitas",
+      "jenis": "Wajib",
+      "semester": 2,
+      "related_cpl": ["CPL01"]
+    },
+    "PRO104": {
+      "id": "PRO104",
+      "nama": "Ilmu Sosial Budaya Dasar",
+      "sks": 4,
+      "universitas": "Universitas",
+      "jenis": "Wajib",
+      "semester": 2,
+      "related_cpl": ["CPL01"]
+    },
+    "FID105": {
+      "id": "FID105",
+      "nama": "Kalkulus I",
+      "sks": 3,
+      "universitas": "Program Studi",
+      "jenis": "Wajib",
+      "semester": 1,
+      "related_cpl": ["CPL02"]
+    },
+    "IFS108": {
+      "id": "IFS108",
+      "nama": "Pengantar Pemrograman",
+      "sks": 4,
+      "universitas": "Program Studi",
+      "jenis": "Wajib",
+      "semester": 1,
+      "related_cpl": ["CPL02", "CPL03"]
+    },
+    "IFE107": {
+      "id": "IFE107",
+      "nama": "Arsitektur dan Organisasi Komputer",
+      "sks": 3,
+      "universitas": "Program Studi",
+      "jenis": "MK Program Studi",
+      "semester": 1,
+      "related_cpl": ["CPL05", "CPL10"]
+    },
+    "IFS207": {
+      "id": "IFS207",
+      "nama": "Assessment dan Pemodelan Perangkat Lunak",
+      "sks": 3,
+      "universitas": "Program Studi",
+      "jenis": "Wajib",
+      "semester": 2,
+      "related_cpl": ["CPL03"]
+    },
+    "IFS201": {
+      "id": "IFS201",
+      "nama": "Struktur Data",
+      "sks": 4,
+      "universitas": "Program Studi",
+      "jenis": "Wajib",
+      "semester": 3,
+      "related_cpl": ["CPL02", "CPL03"]
+    },
+    "IFS202": {
+      "id": "IFS202",
+      "nama": "Basis Data",
+      "sks": 3,
+      "universitas": "Program Studi",
+      "jenis": "Wajib",
+      "semester": 3,
+      "related_cpl": ["CPL03"]
+    }
+  },
+  "cpmk": {
+    "CPMK-1": {
+      "id": "CPMK-1",
+      "description": "Mampu mengamalkan nilai-nilai ketaqwaan kepada Tuhan Yang Maha Esa",
+      "related_cpl": ["CPL01"]
+    },
+    "CPMK-2": {
+      "id": "CPMK-2",
+      "description": "Mampu berkomunikasi dengan baik dalam bahasa Indonesia",
+      "related_cpl": ["CPL01"]
+    },
+    "CPMK-3": {
+      "id": "CPMK-3",
+      "description": "Memahami nilai-nilai Pancasila sebagai dasar negara",
+      "related_cpl": ["CPL02"]
+    },
+    "CPMK-4": {
+      "id": "CPMK-4",
+      "description": "Memahami dinamika sosial budaya dalam masyarakat",
+      "related_cpl": ["CPL02"]
+    },
+    "CPMK-5": {
+      "id": "CPMK-5",
+      "description": "Mampu memahami cara kerja sistem komputer",
+      "related_cpl": ["CPL05"]
+    },
+    "CPMK-6": {
+      "id": "CPMK-6",
+      "description": "Mampu memahami konsep dasar pemrograman",
+      "related_cpl": ["CPL02"]
+    },
+    "CPMK-7": {
+      "id": "CPMK-7",
+      "description": "Mampu menganalisis dan merancang perangkat lunak",
+      "related_cpl": ["CPL03"]
+    },
+    "CPMK-9": {
+      "id": "CPMK-9",
+      "description": "Mampu mengimplementasikan struktur data yang efisien",
+      "related_cpl": ["CPL02", "CPL03"]
+    },
+    "CPMK-11": {
+      "id": "CPMK-11",
+      "description": "Mampu merancang dan mengelola basis data",
+      "related_cpl": ["CPL03"]
+    },
+    "CPMK-18": {
+      "id": "CPMK-18",
+      "description": "Mampu memecahkan masalah dengan pendekatan komputasional",
+      "related_cpl": ["CPL03"]
+    },
+    "CPMK-22": {
+      "id": "CPMK-22",
+      "description": "Mampu mendesain solusi berbasis computing multi-platform yang memenuhi kebutuhan-kebutuhan computing pada sebuah organisasi",
+      "related_cpl": ["CPL10"]
+    },
+    "CPMK-23": {
+      "id": "CPMK-23",
+      "description": "Mampu mengimplementasi solusi berbasis computing multiplatform",
+      "related_cpl": ["CPL10"]
+    },
+    "CPMK-24": {
+      "id": "CPMK-24",
+      "description": "Mampu mengevaluasi solusi berbasis computing multiplatform",
+      "related_cpl": ["CPL10"]
+    }
+  },
+  "assessment_types": {
+    "tugas": {
+      "id": "tugas",
+      "nama": "Tugas",
+      "description": "Penilaian berdasarkan tugas individu atau kelompok"
+    },
+    "kuis": {
+      "id": "kuis",
+      "nama": "Kuis",
+      "description": "Penilaian berdasarkan kuis singkat"
+    },
+    "uts": {
+      "id": "uts",
+      "nama": "UTS",
+      "description": "Ujian Tengah Semester"
+    },
+    "uas": {
+      "id": "uas",
+      "nama": "UAS",
+      "description": "Ujian Akhir Semester"
+    },
+    "presentase": {
+      "id": "presentase",
+      "nama": "Presentase",
+      "description": "Penilaian berdasarkan presentasi"
+    }
+  },
+  "assessment_weights": {
+    "IFE107": {
+      "tugas": {
+        "CPL05": { "CPMK-5": 5 },
+        "CPL10": { "CPMK-22": 0, "CPMK-23": 0, "CPMK-24": 0 }
+      },
+      "kuis": {
+        "CPL05": { "CPMK-5": 10 },
+        "CPL10": { "CPMK-22": 5, "CPMK-23": 0, "CPMK-24": 0 }
+      },
+      "uts": {
+        "CPL05": { "CPMK-5": 0 },
+        "CPL10": { "CPMK-22": 5, "CPMK-23": 20, "CPMK-24": 10 }
+      },
+      "uas": {
+        "CPL05": { "CPMK-5": 0 },
+        "CPL10": { "CPMK-22": 5, "CPMK-23": 10, "CPMK-24": 30 }
+      },
+      "presentase": {
+        "CPL05": { "CPMK-5": 15 },
+        "CPL10": { "CPMK-22": 15, "CPMK-23": 30, "CPMK-24": 40 }
+      }
+    },
+    "IFS108": {
+      "tugas": {
+        "CPL02": { "CPMK-6": 5 },
+        "CPL03": { "CPMK-18": 5 }
+      },
+      "kuis": {
+        "CPL02": { "CPMK-6": 10 },
+        "CPL03": { "CPMK-18": 10 }
+      },
+      "uts": {
+        "CPL02": { "CPMK-6": 25 },
+        "CPL03": { "CPMK-18": 25 }
+      },
+      "uas": {
+        "CPL02": { "CPMK-6": 20 },
+        "CPL03": { "CPMK-18": 20 }
+      },
+      "presentase": {
+        "CPL02": { "CPMK-6": 35 },
+        "CPL03": { "CPMK-18": 35 }
+      }
+    }
+  },
+  "relationships": {
+    "pl_to_cpl": {
+      "PL01": ["CPL01", "CPL02", "CPL05"],
+      "PL02": ["CPL03", "CPL05", "CPL10"],
+      "PL03": ["CPL06", "CPL07"],
+      "PL04": ["CPL01", "CPL06"]
+    },
+    "cpl_to_cpmk": {
+      "CPL01": ["CPMK-1", "CPMK-2"],
+      "CPL02": ["CPMK-3", "CPMK-4", "CPMK-6"],
+      "CPL03": ["CPMK-7", "CPMK-9", "CPMK-11", "CPMK-18"],
+      "CPL05": ["CPMK-5"],
+      "CPL10": ["CPMK-22", "CPMK-23", "CPMK-24"]
+    },
+    "mk_to_cpl": {
+      "PRO103": ["CPL01"],
+      "PRO102": ["CPL01"],
+      "PRO105": ["CPL01"],
+      "PRO104": ["CPL01"],
+      "FID105": ["CPL02"],
+      "IFS108": ["CPL02", "CPL03"],
+      "IFE107": ["CPL05", "CPL10"],
+      "IFS207": ["CPL03"],
+      "IFS201": ["CPL02", "CPL03"],
+      "IFS202": ["CPL03"]
+    }
+  }
+}
