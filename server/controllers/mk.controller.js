@@ -5,6 +5,76 @@ const mkController = {
   // Get all MK with related data
   getAll: async (req, res) => {
     try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized: userId tidak ditemukan",
+        });
+      }
+
+      const mks = await MK.findAll({
+        where: { userId }, // filter sesuai user login
+        include: [
+          {
+            model: CPL,
+            as: "cpl",
+            through: { attributes: [] },
+            include: [
+              {
+                model: PL,
+                as: "pl",
+                through: { attributes: [] },
+              },
+              {
+                model: CPMK,
+                as: "cpmk",
+                through: { attributes: [] },
+                include: [
+                  {
+                    model: SUBCPMK,
+                    as: "subcpmk",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            model: CPMK,
+            as: "cpmk",
+            through: { attributes: [] },
+            include: [
+              {
+                model: CPL,
+                as: "cpl",
+                through: { attributes: [] },
+              },
+              {
+                model: SUBCPMK,
+                as: "subcpmk",
+              },
+            ],
+          },
+        ],
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Data Mata Kuliah berhasil diambil",
+        data: mks,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Gagal mengambil data Mata Kuliah",
+        error: error.message,
+      });
+    }
+  },
+
+  getMkPenilaian: async (req, res) => {
+    try {
       // const userId = req.user?.id;
 
       const mks = await MK.findAll({

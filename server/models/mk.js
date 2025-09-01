@@ -40,7 +40,13 @@ const MK = sequelize.define(
       allowNull: false,
     },
     jenis: {
-      type: DataTypes.ENUM("Wajib", "Pilihan", "MK Program Studi"),
+      type: DataTypes.ENUM(
+        "Wajib",
+        "Pilihan",
+        "MK Program Studi",
+        "MKDU Universitas",
+        "MKDU fakultas"
+      ),
       allowNull: false,
       defaultValue: "MK Program Studi",
     },

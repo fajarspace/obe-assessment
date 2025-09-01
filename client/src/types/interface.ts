@@ -4,10 +4,10 @@ export interface Student {
   no: number;
   nim: string;
   name: string;
-  tugas: number;
-  kuis: number;
-  uts: number;
-  uas: number;
+  // tugas: number;
+  // kuis: number;
+  // uts: number;
+  // uas: number;
   nilaiAkhir?: number;
   nilaiMutu?: string;
   kelulusan?: string;
@@ -25,13 +25,14 @@ export interface SubCPMK {
 export interface MataKuliah {
   id: string;
   nama: string;
-  prodi: string; // Program studi field
+  prodi: string;
   sks: number;
   universitas: string;
   jenis: string;
   semester: number;
   related_cpl: string[];
-  deskripsi?: string; // Optional description
+  related_cpmk?: string[]; // Field baru untuk relasi langsung MK → CPMK
+  deskripsi?: string;
 }
 
 export interface CPL {

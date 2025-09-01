@@ -1,9 +1,8 @@
-// Modified index.tsx - Main Component with Course Search Integration
+// Modified index.tsx - Main Component with Direct CPMK Filtering
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Button,
   Card,
-  Switch,
   Tabs,
   Alert,
   Spin,
@@ -15,9 +14,8 @@ import {
   Statistic,
   Badge,
   Popconfirm,
-  Divider,
-  Tag,
   Tooltip,
+  Segmented,
 } from "antd";
 import {
   PlusOutlined,
@@ -31,6 +29,7 @@ import {
   UploadOutlined,
   RadarChartOutlined,
   SearchOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 
 // Import components and utilities
@@ -40,7 +39,7 @@ import { GradeScale } from "./GradeScale";
 import { PerformanceIndicatorTable } from "./indicator/performance";
 import { AssessmentTypesManager } from "./AssessmentTypeManager";
 import { ExcelUploadTemplate } from "./ExcelUploadTemplate";
-import { CPMKRadarChart } from "./CpmkRadarChart";
+import CPMKRadarChart from "./CpmkRadarChart";
 import { indexedDBService } from "./services/IndexedDb";
 import type {
   Student,
@@ -57,20 +56,22 @@ import {
   DEFAULT_COURSE_INFO,
 } from "./helper";
 import withDashboardLayout from "@/components/hoc/withDashboardLayout";
-import { ExcelExportComponent } from "./ExcelExport";
+import { ExcelExporter } from "./ExcelExport";
 import { useAuth } from "@/context/authContext";
 import { CourseSearchSelection } from "./SearchMk";
 import { CourseDetailInfo } from "./InfoMk";
 import { CplInfo } from "./CplInfo";
-// Import useAuth hook - adjust the path as needed
-// import { useAuth } from "@/hooks/useAuth";
 
 const { Text } = Typography;
 const { TabPane } = Tabs;
 
 const GradingAssessmentTable: React.FC = () => {
   // Auth hook integration
-  const { user } = useAuth(); // Uncomment when useAuth is available
+  const { user } = useAuth();
+
+  const [showExcelExportModal, setShowExcelExportModal] =
+    useState<boolean>(false);
+
   // States
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<string>("");
@@ -152,10 +153,7 @@ const GradingAssessmentTable: React.FC = () => {
         message.success("Local storage initialized successfully");
       } catch (error) {
         console.error("Failed to initialize IndexedDB:", error);
-
-        // Set dbInitialized to true anyway to continue without local storage
         setDbInitialized(true);
-
         message.warning(
           "Local storage unavailable - data will not be saved between sessions"
         );
@@ -172,6 +170,7 @@ const GradingAssessmentTable: React.FC = () => {
     try {
       setIsSaving(true);
       await indexedDBService.saveGradingData(selectedCourse, {
+        courseCode: selectedCourse,
         students,
         assessmentWeights,
         courseInfo,
@@ -180,7 +179,6 @@ const GradingAssessmentTable: React.FC = () => {
       setLastSaved(new Date());
     } catch (error) {
       console.error("Auto-save failed:", error);
-      // Don't show error message for auto-save failures to avoid spam
     } finally {
       setIsSaving(false);
     }
@@ -195,7 +193,7 @@ const GradingAssessmentTable: React.FC = () => {
 
   // Auto-save with debounce
   useEffect(() => {
-    const timeoutId = setTimeout(autoSave, 1000); // 1 second debounce
+    const timeoutId = setTimeout(autoSave, 1000);
     return () => clearTimeout(timeoutId);
   }, [autoSave]);
 
@@ -203,7 +201,7 @@ const GradingAssessmentTable: React.FC = () => {
   useEffect(() => {
     if (dbInitialized && selectedCourse) {
       loadSavedData();
-      setActiveTab("table"); // Switch to table tab after course selection
+      setActiveTab("table");
     }
   }, [dbInitialized, selectedCourse]);
 
@@ -224,7 +222,6 @@ const GradingAssessmentTable: React.FC = () => {
         setAssessmentWeights(savedData.assessmentWeights || {});
         setCourseInfo(savedData.courseInfo || DEFAULT_COURSE_INFO);
 
-        // Update assessment types if saved data has them
         if (savedData.assessmentTypes && savedData.assessmentTypes.length > 0) {
           setAssessmentTypes(savedData.assessmentTypes);
         }
@@ -232,7 +229,6 @@ const GradingAssessmentTable: React.FC = () => {
         message.success("Data loaded from local storage");
         setLastSaved(savedData.lastModified);
       } else {
-        // Initialize fresh data if no saved data
         initializeAssessmentWeights();
         if (students.length === 0) {
           initializeStudents(5);
@@ -242,7 +238,6 @@ const GradingAssessmentTable: React.FC = () => {
       console.error("Failed to load saved data:", error);
       message.warning("Failed to load saved data - starting fresh");
 
-      // Initialize fresh data on error
       initializeAssessmentWeights();
       if (students.length === 0) {
         initializeStudents(5);
@@ -256,17 +251,14 @@ const GradingAssessmentTable: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const apiUri = import.meta.env.VITE_API_URI || "http://localhost:3000";
-      console.log("Fetching data from:", `${apiUri}/mk`);
-
-      const response = await fetch(`${apiUri}/mk`);
+      const apiUri = import.meta.env.VITE_API_URI;
+      const response = await fetch(`${apiUri}/mk/penilaian`);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result: ApiResponse = await response.json();
-      console.log("API Response:", result);
 
       if (!result.success) {
         throw new Error(
@@ -317,7 +309,6 @@ const GradingAssessmentTable: React.FC = () => {
   ) => {
     setSelectedCourse(courseCode);
 
-    // Update course info if provided
     if (newCourseInfo) {
       setCourseInfo(newCourseInfo);
     }
@@ -329,13 +320,64 @@ const GradingAssessmentTable: React.FC = () => {
     }
   };
 
-  // Helper functions
+  // ===== MODIFIED HELPER FUNCTIONS FOR DIRECT CPMK FILTERING =====
+
+  // Get CPL that are directly related to the course
   const getRelatedCPL = (courseCode: string): string[] => {
     return curriculumData?.mata_kuliah?.[courseCode]?.related_cpl || [];
   };
 
+  // Get CPMK that are directly related to the course (not all CPMK from CPL)
+  const getDirectRelatedCPMK = (courseCode: string): string[] => {
+    if (!curriculumData || !courseCode) {
+      console.log(
+        `getDirectRelatedCPMK: Missing data - curriculumData: ${!!curriculumData}, courseCode: ${courseCode}`
+      );
+      return [];
+    }
+
+    // Get course data
+    const courseData = curriculumData?.mata_kuliah?.[courseCode];
+    if (!courseData) {
+      console.log(`getDirectRelatedCPMK: Course ${courseCode} not found`);
+      return [];
+    }
+
+    // Check for direct CPMK relations
+    if (courseData.related_cpmk && courseData.related_cpmk.length > 0) {
+      console.log(
+        `getDirectRelatedCPMK: Found direct CPMK relations for ${courseCode}:`,
+        courseData.related_cpmk
+      );
+      return courseData.related_cpmk;
+    }
+
+    // Log warning if no direct relations found
+    console.warn(
+      `getDirectRelatedCPMK: No direct CPMK relations found for course ${courseCode}. Course data:`,
+      courseData
+    );
+    console.warn(`Available fields in course data:`, Object.keys(courseData));
+
+    return [];
+  };
+
+  // Modified getRelatedCPMK - only return CPMK directly related to this course
   const getRelatedCPMK = (cplCode: string): string[] => {
-    return curriculumData?.cpl?.[cplCode]?.related_cpmk || [];
+    const directCourseCPMK = getDirectRelatedCPMK(selectedCourse);
+    const cplCPMK = curriculumData?.cpl?.[cplCode]?.related_cpmk || [];
+
+    // Return intersection - only CPMK that are both in CPL and directly related to course
+    const filteredCPMK = directCourseCPMK.filter((cpmk) =>
+      cplCPMK.includes(cpmk)
+    );
+
+    console.log(`Debug getRelatedCPMK for CPL ${cplCode}:`);
+    console.log(`- Direct course CPMK (${selectedCourse}):`, directCourseCPMK);
+    console.log(`- CPL CPMK (${cplCode}):`, cplCPMK);
+    console.log(`- Filtered result:`, filteredCPMK);
+
+    return filteredCPMK;
   };
 
   const getRelatedSubCPMK = (cpmkCode: string): string[] => {
@@ -345,28 +387,46 @@ const GradingAssessmentTable: React.FC = () => {
   const hasSubCPMKData = (): boolean => {
     if (!curriculumData || !selectedCourse) return false;
 
-    const relatedCPL = getRelatedCPL(selectedCourse);
-    for (const cpl of relatedCPL) {
-      const relatedCPMK = getRelatedCPMK(cpl);
-      for (const cpmk of relatedCPMK) {
-        const relatedSubCPMK = getRelatedSubCPMK(cpmk);
-        if (relatedSubCPMK.length > 0) {
-          return true;
-        }
+    const directCPMK = getDirectRelatedCPMK(selectedCourse);
+    for (const cpmk of directCPMK) {
+      const relatedSubCPMK = getRelatedSubCPMK(cpmk);
+      if (relatedSubCPMK.length > 0) {
+        return true;
       }
     }
     return false;
   };
 
+  // Modified assessment weights initialization
   const initializeAssessmentWeights = (): void => {
     const relatedCPL = getRelatedCPL(selectedCourse);
     const newWeights: AssessmentWeights = {};
     const hasSubCPMK = hasSubCPMKData();
 
-    relatedCPL.forEach((cpl) => {
+    // Group direct CPMK by their CPL
+    const directCPMK = getDirectRelatedCPMK(selectedCourse);
+    const cpmkGroupedByCPL: Record<string, string[]> = {};
+
+    // Find which CPL each direct CPMK belongs to
+    directCPMK.forEach((cpmk) => {
+      relatedCPL.forEach((cpl) => {
+        const cplCPMKs = curriculumData?.cpl?.[cpl]?.related_cpmk || [];
+        if (cplCPMKs.includes(cpmk)) {
+          if (!cpmkGroupedByCPL[cpl]) {
+            cpmkGroupedByCPL[cpl] = [];
+          }
+          if (!cpmkGroupedByCPL[cpl].includes(cpmk)) {
+            cpmkGroupedByCPL[cpl].push(cpmk);
+          }
+        }
+      });
+    });
+
+    // Initialize weights only for relevant CPL and their direct CPMK
+    Object.entries(cpmkGroupedByCPL).forEach(([cpl, cpmks]) => {
       newWeights[cpl] = {};
-      const relatedCPMK = getRelatedCPMK(cpl);
-      relatedCPMK.forEach((cpmk) => {
+
+      cpmks.forEach((cpmk) => {
         const relatedSubCPMK = getRelatedSubCPMK(cpmk);
 
         // Initialize with dynamic assessment types
@@ -396,9 +456,7 @@ const GradingAssessmentTable: React.FC = () => {
     setAssessmentWeights(newWeights);
   };
 
-  // Other methods remain the same as in your original component...
-  // [Include all other methods: updateAssessmentTypes, updateAssessmentWeight,
-  //  recalculateAllStudents, addStudents, updateStudent, etc.]
+  // ===== END MODIFIED HELPER FUNCTIONS =====
 
   const updateAssessmentTypes = async (
     newTypes: string[],
@@ -406,24 +464,19 @@ const GradingAssessmentTable: React.FC = () => {
   ) => {
     setAssessmentTypes(newTypes);
 
-    // Update comments if provided
     if (comments) {
       setAssessmentComments(comments);
     }
 
-    // Save to IndexedDB
     try {
       await indexedDBService.saveAssessmentTypes(newTypes);
 
-      // Save comments if provided
       if (comments) {
         await indexedDBService.saveSetting("assessmentComments", comments);
       }
 
-      // Reinitialize weights with new assessment types
       initializeAssessmentWeights();
 
-      // Update students with new assessment types
       setStudents((prev) =>
         prev.map((student) => {
           const updated = { ...student };
@@ -469,7 +522,6 @@ const GradingAssessmentTable: React.FC = () => {
       }
 
       if (subCpmk) {
-        // Sub-CPMK mode
         if (!newWeights[cpl][cpmk].subcpmk) {
           newWeights[cpl][cpmk].subcpmk = {};
         }
@@ -484,7 +536,6 @@ const GradingAssessmentTable: React.FC = () => {
         //@ts-ignore
         newWeights[cpl][cpmk].subcpmk![subCpmk][assessmentType] = value;
       } else {
-        // CPMK mode
         //@ts-ignore
         newWeights[cpl][cpmk][assessmentType] = value;
       }
@@ -495,7 +546,6 @@ const GradingAssessmentTable: React.FC = () => {
     setTimeout(() => recalculateAllStudents(), 100);
   };
 
-  // Include other required methods...
   const recalculateAllStudents = (): void => {
     setStudents((prev) =>
       prev.map((student) => {
@@ -508,7 +558,6 @@ const GradingAssessmentTable: React.FC = () => {
           return updated;
         }
 
-        // Calculate final score using CPMK/Sub-CPMK-based weighted average
         let totalWeightedScore = 0;
         let totalWeight = 0;
         const hasSubCPMK = hasSubCPMKData();
@@ -524,7 +573,6 @@ const GradingAssessmentTable: React.FC = () => {
               relatedSubCPMK.length > 0 &&
               assessmentWeights[cpl]?.[cpmk]?.subcpmk
             ) {
-              // Sub-CPMK calculation
               relatedSubCPMK.forEach((subCpmk) => {
                 const weights =
                   assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk];
@@ -550,7 +598,6 @@ const GradingAssessmentTable: React.FC = () => {
                 }
               });
             } else {
-              // CPMK calculation
               const weights = assessmentWeights[cpl]?.[cpmk];
               if (weights) {
                 const cpmkTotalWeight = assessmentTypes.reduce(
@@ -576,7 +623,6 @@ const GradingAssessmentTable: React.FC = () => {
           });
         });
 
-        // If no weights are set, fall back to equal weighting
         if (totalWeight === 0) {
           const finalScore =
             assessmentTypes.reduce(
@@ -589,7 +635,6 @@ const GradingAssessmentTable: React.FC = () => {
             Math.round((totalWeightedScore / totalWeight) * 100) / 100;
         }
 
-        // Calculate grade info
         const gradeInfo = calculateGradeInfo(updated.nilaiAkhir);
         updated.nilaiMutu = gradeInfo.nilaiMutu;
         updated.kelulusan = gradeInfo.kelulusan;
@@ -606,13 +651,11 @@ const GradingAssessmentTable: React.FC = () => {
       const relatedCPL = getRelatedCPL(selectedCourse);
       const hasSubCPMK = hasSubCPMKData();
 
-      // Initialize assessment scores and comments
       assessmentTypes.forEach((type) => {
         student[type] = 0;
         student[`${type}Komentar`] = "";
       });
 
-      // Initialize CPMK/Sub-CPMK fields
       relatedCPL.forEach((cpl) => {
         const relatedCPMK = getRelatedCPMK(cpl);
         relatedCPMK.forEach((cpmk) => {
@@ -653,7 +696,6 @@ const GradingAssessmentTable: React.FC = () => {
             return updated;
           }
 
-          // Simple calculation fallback
           const finalScore =
             assessmentTypes.reduce(
               (sum, type) => sum + (Number(updated[type]) || 0),
@@ -672,15 +714,14 @@ const GradingAssessmentTable: React.FC = () => {
   };
 
   const handleModeChange = async (checked: boolean) => {
-    // Alert konfirmasi sebelum switch mode
     const currentMode = isGradeInputMode
       ? "Input Nilai"
-      : hasSubCPMK
+      : hasSubCPMKData()
       ? "Input Sub-CPMK"
       : "Input CPMK";
     const newMode = checked
       ? "Input Nilai"
-      : hasSubCPMK
+      : hasSubCPMKData()
       ? "Input Sub-CPMK"
       : "Input CPMK";
 
@@ -695,10 +736,9 @@ const GradingAssessmentTable: React.FC = () => {
       );
 
       if (!confirmed) {
-        return; // Batalkan perubahan mode
+        return;
       }
 
-      // Reset semua data jika dikonfirmasi
       resetAllStudentScores();
       message.warning(
         `Mode berhasil diubah ke "${newMode}". Semua nilai telah di-reset.`
@@ -713,18 +753,15 @@ const GradingAssessmentTable: React.FC = () => {
     }
   };
 
-  // Fungsi untuk reset semua nilai ketika switch mode
   const resetAllStudentScores = () => {
     setStudents((prevStudents) =>
       prevStudents.map((student) => {
         const updatedStudent = { ...student };
 
-        // Reset semua assessment type scores
         assessmentTypes.forEach((type) => {
           updatedStudent[type] = 0;
         });
 
-        // Reset semua CPMK percentage values
         const relatedCPL = getRelatedCPL(selectedCourse);
         const hasSubCPMK = hasSubCPMKData();
 
@@ -755,7 +792,6 @@ const GradingAssessmentTable: React.FC = () => {
           });
         });
 
-        // Reset final grades
         updatedStudent.nilaiAkhir = 0;
         updatedStudent.nilaiMutu = "";
         updatedStudent.kelulusan = "";
@@ -765,7 +801,6 @@ const GradingAssessmentTable: React.FC = () => {
     );
   };
 
-  // Fungsi untuk menghitung rata-rata CPMK dan update nilai assessment type
   const updateAssessmentScoreFromCPMK = (
     studentKey: string,
     assessmentType: string
@@ -780,16 +815,15 @@ const GradingAssessmentTable: React.FC = () => {
         const hasSubCPMK = hasSubCPMKData();
         const relatedCPL = getRelatedCPL(selectedCourse);
 
-        // Hitung weighted average dari semua CPMK untuk assessment type ini
         relatedCPL.forEach((cpl) => {
           const relatedCPMK = getRelatedCPMK(cpl);
           relatedCPMK.forEach((cpmk) => {
             const relatedSubCPMK = getRelatedSubCPMK(cpmk);
 
             if (hasSubCPMK && relatedSubCPMK.length > 0) {
-              // Sub-CPMK mode
               relatedSubCPMK.forEach((subCpmk) => {
                 const weight =
+                  //@ts-ignore
                   assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[
                     assessmentType
                   ] || 0;
@@ -800,14 +834,14 @@ const GradingAssessmentTable: React.FC = () => {
                     ] as number) || 0;
                   if (percentageValue > 0) {
                     hasAnyCPMKInput = true;
-                    totalWeightedScore += percentageValue * weight; // Input score * weight
-                    totalWeight += weight; // Sum of weights
+                    totalWeightedScore += percentageValue * weight;
+                    totalWeight += weight;
                   }
                 }
               });
             } else {
-              // CPMK mode
               const weight =
+                //@ts-ignore
                 assessmentWeights[cpl]?.[cpmk]?.[assessmentType] || 0;
               if (weight > 0) {
                 const percentageValue =
@@ -816,33 +850,28 @@ const GradingAssessmentTable: React.FC = () => {
                   ] as number) || 0;
                 if (percentageValue > 0) {
                   hasAnyCPMKInput = true;
-                  totalWeightedScore += percentageValue * weight; // Input score * weight
-                  totalWeight += weight; // Sum of weights
+                  totalWeightedScore += percentageValue * weight;
+                  totalWeight += weight;
                 }
               }
             }
           });
         });
 
-        // Update nilai assessment type berdasarkan input CPMK
         const updatedStudent = { ...student };
 
         if (hasAnyCPMKInput && totalWeight > 0) {
-          // Ada input CPMK, hitung weighted average
           const averageScore = totalWeightedScore / totalWeight;
           updatedStudent[assessmentType] = Math.round(averageScore * 100) / 100;
         } else {
-          // Tidak ada input CPMK, set ke 0
           updatedStudent[assessmentType] = 0;
         }
 
-        // Recalculate final grade
         const hasAllAssessmentValues = assessmentTypes.every(
           (type) => ((updatedStudent[type] as number) || 0) > 0
         );
 
         if (hasAllAssessmentValues) {
-          // Hitung nilai akhir menggunakan simple average dari assessment types
           const totalScore = assessmentTypes.reduce(
             (sum, type) => sum + ((updatedStudent[type] as number) || 0),
             0
@@ -850,12 +879,10 @@ const GradingAssessmentTable: React.FC = () => {
           const averageScore = totalScore / assessmentTypes.length;
           updatedStudent.nilaiAkhir = Math.round(averageScore * 100) / 100;
 
-          // Update grade info
           const gradeInfo = calculateGradeInfo(updatedStudent.nilaiAkhir);
           updatedStudent.nilaiMutu = gradeInfo.nilaiMutu;
           updatedStudent.kelulusan = gradeInfo.kelulusan;
         } else {
-          // Reset jika tidak semua assessment type memiliki nilai
           updatedStudent.nilaiAkhir = 0;
           updatedStudent.nilaiMutu = "";
           updatedStudent.kelulusan = "";
@@ -866,12 +893,9 @@ const GradingAssessmentTable: React.FC = () => {
     );
   };
 
-  // Handle Excel upload
   const handleExcelUpload = (uploadedStudents: Student[]) => {
-    // Replace current students with uploaded data
     setStudents(uploadedStudents);
 
-    // Recalculate all students after upload
     setTimeout(() => {
       recalculateAllStudents();
     }, 100);
@@ -916,13 +940,11 @@ const GradingAssessmentTable: React.FC = () => {
       const relatedCPL = getRelatedCPL(selectedCourse);
       const hasSubCPMK = hasSubCPMKData();
 
-      // Initialize assessment scores and comments
       assessmentTypes.forEach((type) => {
         student[type] = 0;
         student[`${type}Komentar`] = "";
       });
 
-      // Initialize CPMK/Sub-CPMK fields
       relatedCPL.forEach((cpl) => {
         const relatedCPMK = getRelatedCPMK(cpl);
         relatedCPMK.forEach((cpmk) => {
@@ -984,18 +1006,12 @@ const GradingAssessmentTable: React.FC = () => {
     <div className="min-h-screen">
       <div className="max-w-full mx-auto">
         <div className="!space-y-6">
-          {/* Main Tabs */}
-          <Tabs activeKey={activeTab} onChange={setActiveTab} size="large">
-            {/* Course Selection Tab */}
-
+          <Tabs activeKey={activeTab} onChange={setActiveTab} className=" !p-4">
             <TabPane
               tab={
                 <span>
                   <SearchOutlined />
                   &emsp; Pilih Mata Kuliah
-                  {selectedCourse && (
-                    <Badge status="success" className="!ml-2" />
-                  )}
                 </span>
               }
               key="selection"
@@ -1062,7 +1078,7 @@ const GradingAssessmentTable: React.FC = () => {
                         Semester: {courseInfo.semester} ({courseInfo.year})
                       </div>
                       <div className="text-xs text-gray-600 mt-1">
-                        Dosen: {courseInfo.lecturer || "Belum diset"}
+                        Dosen: {courseInfo.lecturer || "-"}
                       </div>
                     </div>
                   </div>
@@ -1104,91 +1120,6 @@ const GradingAssessmentTable: React.FC = () => {
                   </div>
                 </Col>
               </Row>
-
-              {/* CPL/CPMK Information Section */}
-              {relatedCPL.length > 0 && (
-                <div className="mt-4">
-                  <Divider orientation="left">Capaian Pembelajaran</Divider>
-                  <Row gutter={[16, 16]}>
-                    {relatedCPL.map((cplCode) => {
-                      const cplData = curriculumData?.cpl?.[cplCode];
-                      const relatedCPMK = getRelatedCPMK(cplCode);
-
-                      return (
-                        <Col xs={24} lg={12} key={cplCode}>
-                          <Card size="small" className="h-full">
-                            <div className="space-y-3">
-                              <div>
-                                <Tag color="blue" className="mb-2">
-                                  CPL
-                                </Tag>
-                                <div className="font-medium">
-                                  {cplData?.kode || cplCode}
-                                </div>
-                                {cplData?.description && (
-                                  <div className="text-sm text-gray-600 mt-1">
-                                    {cplData.description}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div>
-                                <div className="text-sm font-medium text-gray-700 mb-2">
-                                  CPMK Terkait ({relatedCPMK.length}):
-                                </div>
-                                <div className="space-y-2">
-                                  {relatedCPMK.slice(0, 3).map((cpmkCode) => {
-                                    const cpmkData =
-                                      curriculumData?.cpmk?.[cpmkCode];
-                                    const relatedSubCPMK =
-                                      getRelatedSubCPMK(cpmkCode);
-
-                                    return (
-                                      <div
-                                        key={cpmkCode}
-                                        className="border-l-3 border-green-300 pl-3"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <Tag color="green" size="small">
-                                            CPMK
-                                          </Tag>
-                                          <span className="text-sm font-medium">
-                                            {cpmkData?.kode || cpmkCode}
-                                          </span>
-                                          {relatedSubCPMK.length > 0 && (
-                                            <Tag size="small">
-                                              {relatedSubCPMK.length} Sub-CPMK
-                                            </Tag>
-                                          )}
-                                        </div>
-                                        {cpmkData?.description && (
-                                          <div className="text-xs text-gray-600 mt-1">
-                                            {cpmkData.description.length > 100
-                                              ? `${cpmkData.description.substring(
-                                                  0,
-                                                  100
-                                                )}...`
-                                              : cpmkData.description}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                  {relatedCPMK.length > 3 && (
-                                    <div className="text-xs text-gray-500">
-                                      +{relatedCPMK.length - 3} CPMK lainnya
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </Card>
-                        </Col>
-                      );
-                    })}
-                  </Row>
-                </div>
-              )}
             </Card>
 
             {selectedCourse && (
@@ -1211,7 +1142,6 @@ const GradingAssessmentTable: React.FC = () => {
               </TabPane>
             )}
 
-            {/* Assessment Tab - Only show if course is selected */}
             {selectedCourse && (
               <TabPane
                 tab={
@@ -1222,10 +1152,10 @@ const GradingAssessmentTable: React.FC = () => {
                 }
                 key="table"
               >
-                <div className="space-y-6">
-                  {/* Course Information */}
+                <div className="!space-y-6">
                   {selectedCourse && (
                     <CourseDetailInfo
+                      user={user?.profile?.nama ?? ""}
                       selectedCourse={selectedCourse}
                       selectedCourseData={selectedCourseData}
                       courseInfo={courseInfo}
@@ -1238,9 +1168,15 @@ const GradingAssessmentTable: React.FC = () => {
                     />
                   )}
 
-                  {/* Dynamic Assessment Weights Table */}
+                  <Alert
+                    message="Dosen MK hanya perlu mengisi rubrik dikolom kuning"
+                    type="warning"
+                    showIcon
+                    className="mb-4"
+                  />
+
                   {relatedCPL.length > 0 && (
-                    <Card title={`Bobot Assessment`} size="small">
+                    <Card title={`Bobot Assessment`}>
                       <DynamicAssessmentWeightsTable
                         assessmentWeights={assessmentWeights}
                         relatedCPL={relatedCPL}
@@ -1254,7 +1190,6 @@ const GradingAssessmentTable: React.FC = () => {
                     </Card>
                   )}
 
-                  {/* Warning for missing CPL/CPMK data */}
                   {relatedCPL.length === 0 && selectedCourse && (
                     <Alert
                       message="Tidak ada data CPL/CPMK"
@@ -1265,119 +1200,143 @@ const GradingAssessmentTable: React.FC = () => {
                     />
                   )}
 
-                  {/* Save Status and Assessment Mode Switch */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <SettingOutlined className="text-lg" />
-                      <span className="font-semibold">Mode Penilaian</span>
+                  <Card title="Penilaian">
+                    <div className="flex items-center justify-between !space-y-6">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <SettingOutlined className="text-lg text-blue-600" />
+                          <span className="font-semibold">Mode Penilaian</span>
+                        </div>
 
-                      <Switch
-                        checked={isGradeInputMode}
-                        onChange={handleModeChange}
-                        checkedChildren="Input Nilai"
-                        unCheckedChildren={
-                          hasSubCPMK ? "Input Sub-CPMK" : "Input CPMK"
-                        }
-                      />
+                        <Segmented
+                          value={
+                            isGradeInputMode
+                              ? "nilai"
+                              : hasSubCPMK
+                              ? "sub"
+                              : "cpmk"
+                          }
+                          onChange={(val) => handleModeChange(val === "nilai")}
+                          options={[
+                            { label: "Input Nilai", value: "nilai" },
+                            {
+                              label: hasSubCPMK ? "Input CPMK" : "Input CPMK",
+                              value: hasSubCPMK ? "sub" : "cpmk",
+                            },
+                          ]}
+                          className="custom-segmented w-fit"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <DatabaseOutlined
+                          className={
+                            isSaving ? "text-blue-500" : "text-green-500"
+                          }
+                        />
+                        <Text type="secondary" className="text-xs">
+                          {isSaving
+                            ? "Saving..."
+                            : lastSaved
+                            ? `Saved: ${lastSaved.toLocaleTimeString()}`
+                            : "No saves yet"}
+                        </Text>
+                        <Popconfirm
+                          title="Hapus semua data"
+                          description="Apakah Anda yakin ingin menghapus semua data untuk mata kuliah ini?"
+                          onConfirm={handleClearData}
+                          okText="Ya"
+                          cancelText="Tidak"
+                        >
+                          <Button type="link" danger icon={<DeleteOutlined />}>
+                            Clear Data
+                          </Button>
+                        </Popconfirm>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <DatabaseOutlined
-                        className={
-                          isSaving ? "text-blue-500" : "text-green-500"
-                        }
-                      />
-                      <Text type="secondary" className="text-xs">
-                        {isSaving
-                          ? "Saving..."
-                          : lastSaved
-                          ? `Saved: ${lastSaved.toLocaleTimeString()}`
-                          : "No saves yet"}
-                      </Text>
-                      <Popconfirm
-                        title="Hapus semua data"
-                        description="Apakah Anda yakin ingin menghapus semua data untuk mata kuliah ini?"
-                        onConfirm={handleClearData}
-                        okText="Ya"
-                        cancelText="Tidak"
-                      >
-                        <Button type="link" danger icon={<DeleteOutlined />}>
-                          Clear Data
+                    <div className="flex items-center justify-between !space-y-6 mb-6">
+                      <Space wrap>
+                        <Button
+                          type="primary"
+                          icon={<PlusOutlined />}
+                          onClick={() => addStudents(1)}
+                        >
+                          Tambah Mahasiswa
                         </Button>
-                      </Popconfirm>
+                        {/* <Button
+                          icon={<PlusOutlined />}
+                     
+                          onClick={() => addStudents(5)}
+                        >
+                          Tambah 5 Mahasiswa
+                        </Button> */}
+                        <Button
+                          icon={<UploadOutlined />}
+                          onClick={() => setShowExcelUploadModal(true)}
+                          type="default"
+                          className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                        >
+                          Upload Excel
+                        </Button>
+                        {/* TOMBOL EXPORT BARU */}
+                        <Button
+                          icon={<DownloadOutlined />}
+                          onClick={() => setShowExcelExportModal(true)}
+                          type="default"
+                          className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                          disabled={students.length === 0}
+                        >
+                          Export Excel
+                        </Button>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          onClick={fetchCourseData}
+                          loading={loading}
+                        >
+                          Refresh Data
+                        </Button>
+                      </Space>
+
+                      {/* TAMBAHKAN KOMPONEN EXPORT EXCEL INI */}
+                      {selectedCourse && (
+                        <ExcelExporter
+                          visible={showExcelExportModal}
+                          onClose={() => setShowExcelExportModal(false)}
+                          students={students}
+                          assessmentWeights={assessmentWeights}
+                          assessmentTypes={assessmentTypes}
+                          selectedCourse={selectedCourse}
+                          curriculumData={curriculumData}
+                          relatedCPL={relatedCPL}
+                          getRelatedCPMK={getRelatedCPMK}
+                          getRelatedSubCPMK={getRelatedSubCPMK}
+                          hasSubCPMKData={hasSubCPMK}
+                          courseInfo={courseInfo}
+                          isGradeInputMode={isGradeInputMode}
+                          assessmentComments={assessmentComments}
+                        />
+                      )}
                     </div>
-                  </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-between">
-                    <Space wrap>
-                      <Button
-                        type="primary"
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={() => addStudents(1)}
-                      >
-                        Tambah 1 Mahasiswa
-                      </Button>
-                      <Button
-                        icon={<PlusOutlined />}
-                        size="small"
-                        onClick={() => addStudents(5)}
-                      >
-                        Tambah 5 Mahasiswa
-                      </Button>
-                      <Button
-                        icon={<UploadOutlined />}
-                        size="small"
-                        onClick={() => setShowExcelUploadModal(true)}
-                        type="default"
-                        className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                      >
-                        Upload Excel
-                      </Button>
-                      <Button
-                        icon={<ReloadOutlined />}
-                        onClick={fetchCourseData}
-                        loading={loading}
-                        size="small"
-                      >
-                        Refresh Data
-                      </Button>
-                    </Space>
-
-                    <ExcelExportComponent
+                    <EnhancedStudentsGradesTable
                       students={students}
                       assessmentWeights={assessmentWeights}
                       relatedCPL={relatedCPL}
                       getRelatedCPMK={getRelatedCPMK}
                       getRelatedSubCPMK={getRelatedSubCPMK}
+                      updateStudent={updateStudent}
+                      calculateAverage={calculateAverageForField}
+                      isGradeInputMode={isGradeInputMode}
                       curriculumData={curriculumData}
                       hasSubCPMKData={hasSubCPMK}
                       assessmentTypes={assessmentTypes}
-                      selectedCourse={selectedCourse}
-                      calculateAverage={calculateAverageForField}
+                      updateAssessmentScoreFromCPMK={
+                        updateAssessmentScoreFromCPMK
+                      }
                     />
-                  </div>
+                  </Card>
 
-                  {/* Enhanced Assessment Table */}
-                  <EnhancedStudentsGradesTable
-                    students={students}
-                    assessmentWeights={assessmentWeights}
-                    relatedCPL={relatedCPL}
-                    getRelatedCPMK={getRelatedCPMK}
-                    getRelatedSubCPMK={getRelatedSubCPMK}
-                    updateStudent={updateStudent}
-                    calculateAverage={calculateAverageForField}
-                    isGradeInputMode={isGradeInputMode}
-                    curriculumData={curriculumData}
-                    hasSubCPMKData={hasSubCPMK}
-                    assessmentTypes={assessmentTypes}
-                    updateAssessmentScoreFromCPMK={
-                      updateAssessmentScoreFromCPMK
-                    }
-                  />
-
-                  {/* Summary Statistics */}
                   <Row gutter={[16, 16]}>
                     <Col xs={12} sm={6}>
                       <Card>
@@ -1423,7 +1382,6 @@ const GradingAssessmentTable: React.FC = () => {
                     </Col>
                   </Row>
 
-                  {/* Grade Scale and Performance Indicator Information */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <GradeScale />
                     <PerformanceIndicatorTable />
@@ -1432,7 +1390,6 @@ const GradingAssessmentTable: React.FC = () => {
               </TabPane>
             )}
 
-            {/* Radar Chart Tab - Only show if course is selected */}
             {selectedCourse && (
               <TabPane
                 tab={
@@ -1464,7 +1421,6 @@ const GradingAssessmentTable: React.FC = () => {
           </Tabs>
         </div>
 
-        {/* Assessment Types Manager Modal */}
         <AssessmentTypesManager
           visible={showAssessmentTypesModal}
           onClose={() => setShowAssessmentTypesModal(false)}
@@ -1472,7 +1428,6 @@ const GradingAssessmentTable: React.FC = () => {
           onUpdateAssessmentTypes={updateAssessmentTypes}
         />
 
-        {/* Excel Upload Modal */}
         {selectedCourse && (
           <ExcelUploadTemplate
             visible={showExcelUploadModal}
@@ -1486,6 +1441,9 @@ const GradingAssessmentTable: React.FC = () => {
             getRelatedSubCPMK={getRelatedSubCPMK}
             hasSubCPMKData={hasSubCPMK}
             onDataUploaded={handleExcelUpload}
+            courseInfo={courseInfo}
+            isGradeInputMode={isGradeInputMode}
+            assessmentComments={assessmentComments}
           />
         )}
       </div>

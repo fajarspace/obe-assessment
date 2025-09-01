@@ -1,4 +1,4 @@
-// CourseSearchSelection.tsx - Enhanced Responsive Version
+// CourseSearchSelection.tsx - Enhanced Version with Recent Courses
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -11,32 +11,46 @@ import {
   Empty,
   Spin,
   Form,
-  Select,
-  Row,
-  Col,
-  Divider,
-  Space,
-  Tooltip,
   Grid,
   Drawer,
-  Collapse,
+  Badge,
+  Tooltip,
+  Space,
+  Popconfirm,
 } from "antd";
 import {
   SearchOutlined,
   BookOutlined,
   CheckCircleOutlined,
-  InfoCircleOutlined,
-  SettingOutlined,
-  UserOutlined,
   FilterOutlined,
   EyeOutlined,
+  ClockCircleOutlined,
+  PlayCircleOutlined,
+  StarOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import type { MataKuliah, CourseInfo } from "@/types/interface";
+import { indexedDBService } from "./services/IndexedDb";
+import { Link } from "react-router-dom";
 
 const { Search } = Input;
 const { Text } = Typography;
-const { Option } = Select;
 const { useBreakpoint } = Grid;
+
+interface CourseSelection {
+  id: string;
+  courseCode: string;
+  courseName: string;
+  courseInfo: CourseInfo;
+  hasData: boolean;
+  lastAccessed: Date;
+  progress: {
+    totalStudents: number;
+    completedStudents: number;
+    assessmentTypesSet: boolean;
+    weightsConfigured: boolean;
+  };
+}
 
 interface Props {
   availableCourses: Record<string, MataKuliah>;
@@ -62,6 +76,8 @@ export const CourseSearchSelection: React.FC<Props> = ({
     Array<{ code: string; data: MataKuliah }>
   >([]);
   const [showResults, setShowResults] = useState(false);
+  const [recentCourses, setRecentCourses] = useState<CourseSelection[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(true);
   const [form] = Form.useForm();
   const screens = useBreakpoint();
 
@@ -83,12 +99,22 @@ export const CourseSearchSelection: React.FC<Props> = ({
     `${currentYear + 1}/${currentYear + 2}`,
   ];
 
-  // Generate semester options
-  const semesters = [
-    { value: 1, label: "Ganjil" },
-    { value: 2, label: "Genap" },
-    { value: 3, label: "Antara" },
-  ];
+  // Load recent courses from IndexedDB
+  useEffect(() => {
+    const loadRecentCourses = async () => {
+      try {
+        setLoadingRecent(true);
+        const recent = await indexedDBService.getRecentCourseSelections(8);
+        setRecentCourses(recent);
+      } catch (error) {
+        console.error("Failed to load recent courses:", error);
+      } finally {
+        setLoadingRecent(false);
+      }
+    };
+
+    loadRecentCourses();
+  }, []);
 
   // Filter courses based on search term and user's prodi
   useEffect(() => {
@@ -175,13 +201,33 @@ export const CourseSearchSelection: React.FC<Props> = ({
     setSearchTerm(value);
   };
 
-  const handleCourseClick = (courseCode: string) => {
-    // Simple course selection without course info setup
-    onCourseSelect(courseCode, {
+  const handleCourseClick = async (courseCode: string) => {
+    const courseData = availableCourses[courseCode];
+    const defaultCourseInfo = {
       semester: 1,
       year: academicYears[0],
+      kelas: "",
       lecturer: userName || "",
-    });
+    };
+
+    try {
+      // Save course selection to IndexedDB
+      await indexedDBService.saveCourseSelection(
+        courseCode,
+        courseData?.nama || courseCode,
+        defaultCourseInfo
+      );
+
+      // Update recent courses
+      const updatedRecent = await indexedDBService.getRecentCourseSelections(8);
+      setRecentCourses(updatedRecent);
+    } catch (error) {
+      console.error("Failed to save course selection:", error);
+      // Don't block the selection process
+    }
+
+    // Proceed with course selection
+    onCourseSelect(courseCode, defaultCourseInfo);
     setSearchTerm("");
     setShowResults(false);
     setCourseDetailVisible(false);
@@ -192,13 +238,74 @@ export const CourseSearchSelection: React.FC<Props> = ({
     );
   };
 
-  const handleClearSelection = () => {
+  const handleRecentCourseClick = async (recentCourse: CourseSelection) => {
+    try {
+      // Update access time
+      await indexedDBService.saveCourseSelection(
+        recentCourse.courseCode,
+        recentCourse.courseName,
+        recentCourse.courseInfo
+      );
+
+      // Update recent courses list
+      const updatedRecent = await indexedDBService.getRecentCourseSelections(8);
+      setRecentCourses(updatedRecent);
+    } catch (error) {
+      console.error("Failed to update course access:", error);
+    }
+
+    onCourseSelect(recentCourse.courseCode, recentCourse.courseInfo);
+    message.success(`Melanjutkan penilaian "${recentCourse.courseName}"`);
+  };
+
+  const handleDeleteRecentCourse = async (
+    courseCode: string,
+    courseName: string
+  ) => {
+    try {
+      await indexedDBService.deleteCourseSelection(courseCode);
+      await indexedDBService.deleteGradingData(courseCode);
+
+      // Update recent courses list
+      const updatedRecent = await indexedDBService.getRecentCourseSelections(8);
+      setRecentCourses(updatedRecent);
+
+      message.success(`Data penilaian "${courseName}" berhasil dihapus`);
+    } catch (error) {
+      console.error("Failed to delete course:", error);
+      message.error("Gagal menghapus data penilaian");
+    }
+  };
+
+  const handleClearSelection = async () => {
+    try {
+      // Hapus data dari IndexedDB jika ada
+      if (selectedCourse) {
+        await indexedDBService.deleteCourseSelection(selectedCourse);
+        await indexedDBService.deleteGradingData(selectedCourse);
+
+        // Update recent courses list
+        const updatedRecent = await indexedDBService.getRecentCourseSelections(
+          8
+        );
+        setRecentCourses(updatedRecent);
+
+        message.success("Data mata kuliah berhasil dihapus");
+      }
+    } catch (error) {
+      console.error("Failed to clear course selection:", error);
+      message.warning(
+        "Gagal menghapus data, tetapi pemilihan mata kuliah dibatalkan"
+      );
+    }
+
+    // Reset course selection
     onCourseSelect("", {
       semester: 1,
       year: academicYears[0],
+      kelas: "",
       lecturer: userName || "",
     });
-    message.info("Pemilihan mata kuliah dibatalkan");
   };
 
   const openCourseDetail = (courseCode: string, courseData: MataKuliah) => {
@@ -230,6 +337,93 @@ export const CourseSearchSelection: React.FC<Props> = ({
       </Card>
     );
   }
+
+  // Recent Courses Component
+  const RecentCoursesSection = () => {
+    if (loadingRecent) {
+      return (
+        <Card size="small" title="Mata Kuliah Terbaru">
+          <div className="text-center py-4">
+            <Spin />
+          </div>
+        </Card>
+      );
+    }
+
+    if (recentCourses.length === 0) {
+      return null;
+    }
+
+    return (
+      <Card
+        size="small"
+        title={
+          <Space>
+            <ClockCircleOutlined />
+            Lanjutkan Penilaian
+            <Badge count={recentCourses.filter((c) => c.hasData).length} />
+          </Space>
+        }
+        className="!mb-4"
+      >
+        <div className={isMobile ? "!space-y-3" : "!space-y-2"}>
+          {recentCourses.slice(0, isMobile ? 3 : 5).map((course) => {
+            return (
+              <div
+                key={course.courseCode}
+                className="flex items-center justify-between p-3 border rounded-lg text-white cursor-pointer bg-yellow-300"
+                onClick={() => handleRecentCourseClick(course)}
+              >
+                <div className="flex items-center gap-2 ml-3">
+                  {course.hasData ? (
+                    <Tooltip title="Lanjutkan Penilaian">
+                      <Link to={`/dashboard/penilaian/${course.courseCode}`}>
+                        <PlayCircleOutlined className="text-green-500 text-lg cursor-pointer" />
+                      </Link>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip title="Mulai Penilaian">
+                      <Link to={`/dashboard/penilaian/${course.courseCode}`}>
+                        <StarOutlined className="text-blue-500 text-lg cursor-pointer" />
+                      </Link>
+                    </Tooltip>
+                  )}
+                  <a
+                    href={`/dashboard/penilaian/${course.courseCode}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {course.courseName}
+                  </a>{" "}
+                  <Tag color="gray">{course.courseCode}</Tag>
+                </div>
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteRecentCourse(
+                      course.courseCode,
+                      course.courseName
+                    );
+                  }}
+                >
+                  Hapus
+                </Button>
+              </div>
+            );
+          })}
+          {recentCourses.length > (isMobile ? 3 : 5) && (
+            <div className="text-center text-xs text-gray-500 pt-2">
+              +{recentCourses.length - (isMobile ? 3 : 5)} mata kuliah lainnya
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  };
 
   // Mobile List Component for Search Results
   const MobileSearchResults = () => (
@@ -267,24 +461,14 @@ export const CourseSearchSelection: React.FC<Props> = ({
               description={
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-1">
-                    <Tag color="blue" size="small">
-                      {code}
-                    </Tag>
-                    <Tag color="green" size="small">
-                      {data.sks || 0} SKS
-                    </Tag>
-                    <Tag color="orange" size="small">
-                      Sem {data.semester || "N/A"}
-                    </Tag>
+                    <Tag color="gray">{code}</Tag>
+                    <Tag color="green">{data.sks || 0} SKS</Tag>
+                    <Tag color="orange">Sem {data.semester || "N/A"}</Tag>
                   </div>
                   <Text className="text-xs text-gray-600 block">
                     {data.jenis || "Jenis tidak tersedia"}
                   </Text>
-                  {data.prodi && (
-                    <Tag color="purple" size="small">
-                      {data.prodi}
-                    </Tag>
-                  )}
+                  {data.prodi && <Tag color="purple">{data.prodi}</Tag>}
                 </div>
               }
             />
@@ -301,7 +485,7 @@ export const CourseSearchSelection: React.FC<Props> = ({
         dataSource={filteredCourses}
         renderItem={({ code, data }) => (
           <List.Item
-            className="cursor-pointer hover:bg-gray-50 px-4"
+            className="!cursor-pointer hover:bg-gray-50 !px-4"
             onClick={() => handleCourseClick(code)}
           >
             <List.Item.Meta
@@ -310,7 +494,7 @@ export const CourseSearchSelection: React.FC<Props> = ({
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{data.nama || code}</span>
                   <div className="flex gap-2">
-                    <Tag color="blue">{code}</Tag>
+                    <Tag color="gray">{code}</Tag>
                     <Tag color="green">{data.sks || 0} SKS</Tag>
                     {data.prodi && <Tag color="purple">{data.prodi}</Tag>}
                   </div>
@@ -349,13 +533,13 @@ export const CourseSearchSelection: React.FC<Props> = ({
       height="auto"
     >
       {selectedCourseDetail && (
-        <div className="space-y-4">
+        <div className="!space-y-4">
           <div className="text-center">
             <Text strong className="text-lg">
               {selectedCourseDetail.data.nama || selectedCourseDetail.code}
             </Text>
             <div className="flex justify-center gap-2 mt-2">
-              <Tag color="blue">{selectedCourseDetail.code}</Tag>
+              <Tag color="gray">{selectedCourseDetail.code}</Tag>
               <Tag color="green">{selectedCourseDetail.data.sks || 0} SKS</Tag>
               <Tag color="orange">
                 Sem {selectedCourseDetail.data.semester || "N/A"}
@@ -406,7 +590,7 @@ export const CourseSearchSelection: React.FC<Props> = ({
         size="small"
         className={isMobile ? "mx-0" : ""}
       >
-        <div className="space-y-4">
+        <div className="!space-y-4">
           <div
             className={`${
               isMobile ? "space-y-3" : "flex items-center justify-between"
@@ -437,79 +621,19 @@ export const CourseSearchSelection: React.FC<Props> = ({
                 )}
               </div>
             </div>
-            <Button
-              type="primary"
-              ghost
-              onClick={handleClearSelection}
-              // size={isMobile ? "small" : "default"}
-              block={isMobile}
+            <Popconfirm
+              title="Hapus Data Penilaian"
+              description="Apakah Anda yakin ingin menghapus semua data penilaian untuk mata kuliah [nama]?"
+              okText="Ya, Hapus"
+              cancelText="Batal"
+              okButtonProps={{ danger: true }}
+              onConfirm={handleClearSelection}
             >
-              Ganti Mata Kuliah
-            </Button>
+              <Button type="primary" ghost block={isMobile}>
+                Ganti Mata Kuliah
+              </Button>
+            </Popconfirm>
           </div>
-
-          {/* Course Information Form */}
-          <Divider />
-          <Form form={form} layout="vertical" size="small">
-            <Row gutter={isMobile ? [8, 12] : [16, 16]}>
-              <Col xs={24} sm={8}>
-                <Form.Item
-                  name="semester"
-                  label="Semester"
-                  rules={[{ required: true, message: "Pilih semester!" }]}
-                >
-                  <Select placeholder="Pilih Semester">
-                    {semesters.map((sem) => (
-                      <Option key={sem.value} value={sem.value}>
-                        Semester {sem.value} ({sem.label})
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={8}>
-                <Form.Item
-                  name="year"
-                  label="Tahun Akademik"
-                  rules={[{ required: true, message: "Pilih tahun akademik!" }]}
-                >
-                  <Select placeholder="Pilih Tahun">
-                    {academicYears.map((year) => (
-                      <Option key={year} value={year}>
-                        {year}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={8}>
-                <Form.Item
-                  name="lecturer"
-                  label="Dosen Pengampu"
-                  rules={[{ required: true, message: "Masukkan nama dosen!" }]}
-                >
-                  <Input placeholder="Nama Dosen" prefix={<UserOutlined />} />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
-
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <SettingOutlined />
-            <Text>
-              Info Kelas: Semester {form.getFieldValue("semester") || 1},{" "}
-              {form.getFieldValue("year") || academicYears[0]} -{" "}
-              {form.getFieldValue("lecturer") || "Belum diset"}
-            </Text>
-          </div>
-
-          {userProdi && (
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <Text className="text-sm text-blue-700">
-                Program Studi Anda: {userProdi}
-              </Text>
-            </div>
-          )}
         </div>
       </Card>
     );
@@ -518,52 +642,17 @@ export const CourseSearchSelection: React.FC<Props> = ({
   // Show search interface if no course is selected
   return (
     <>
+      {/* Recent Courses Section */}
+      <RecentCoursesSection />
+
       <Card
         title="Pilih Mata Kuliah"
         size="small"
         className={isMobile ? "mx-0" : ""}
       >
-        <div className="space-y-4">
-          {/* User Info */}
-          {(userProdi || userName) && (
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
-                <InfoCircleOutlined />
-                <span>Informasi Pengguna</span>
-              </div>
-              <div className="space-y-1">
-                {userName && (
-                  <div className="text-sm">
-                    <Text strong>Nama:</Text> {userName}
-                  </div>
-                )}
-                {userProdi && (
-                  <div className="text-sm">
-                    <Text strong>Program Studi:</Text> {userProdi}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Course Count Info */}
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <InfoCircleOutlined />
-              <span>
-                Total mata kuliah tersedia:{" "}
-                {Object.keys(availableCourses).length}
-              </span>
-            </div>
-            {userProdi && (
-              <div className="text-sm text-gray-500 mt-1">
-                Filter berdasarkan program studi: <strong>{userProdi}</strong>
-              </div>
-            )}
-          </div>
-
+        <div className="!space-y-4">
           {/* Search Interface */}
-          <div className={`${isMobile ? "space-y-2" : "flex gap-2"}`}>
+          <div className={`${isMobile ? "!space-y-2" : "flex gap-2"}`}>
             <Search
               placeholder="Cari mata kuliah..."
               allowClear
@@ -581,7 +670,6 @@ export const CourseSearchSelection: React.FC<Props> = ({
               }}
               type="default"
               icon={<FilterOutlined />}
-              // size={isMobile ? "middle" : "default"}
               block={isMobile}
             >
               {isMobile ? "Semua" : "Tampilkan Semua"}
@@ -606,10 +694,6 @@ export const CourseSearchSelection: React.FC<Props> = ({
                         Tidak ditemukan mata kuliah
                         {userProdi && ` untuk program studi ${userProdi}`}
                       </div>
-                      <div className="text-sm text-gray-500 mt-1">
-                        Coba gunakan kata kunci yang berbeda atau cek koneksi
-                        API
-                      </div>
                     </div>
                   }
                 />
@@ -618,17 +702,6 @@ export const CourseSearchSelection: React.FC<Props> = ({
           )}
 
           {/* Empty States */}
-          {!showResults &&
-            !searchTerm &&
-            Object.keys(availableCourses).length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <InfoCircleOutlined className="text-4xl mb-2 text-red-400" />
-                <div className="text-red-600">Tidak ada data mata kuliah</div>
-                <div className="text-sm mt-1">
-                  Pastikan koneksi API berjalan dengan baik
-                </div>
-              </div>
-            )}
 
           {!showResults &&
             !searchTerm &&

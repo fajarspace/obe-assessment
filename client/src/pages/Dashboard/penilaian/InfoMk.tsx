@@ -9,7 +9,8 @@ const { Option } = Select;
 
 interface Props {
   selectedCourse: string;
-  selectedCourseData: MataKuliah | undefined;
+  user: string; // balik jadi string
+  selectedCourseData?: MataKuliah;
   courseInfo: CourseInfo;
   setCourseInfo: (info: CourseInfo) => void;
   assessmentTypes: string[];
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export const CourseDetailInfo: React.FC<Props> = ({
+  user,
   selectedCourse,
   selectedCourseData,
   courseInfo,
@@ -41,8 +43,6 @@ export const CourseDetailInfo: React.FC<Props> = ({
     { value: 2, label: "Genap" },
     { value: 3, label: "Antara" },
   ];
-
-  const classes = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
   React.useEffect(() => {
     form.setFieldsValue({
@@ -144,7 +144,9 @@ export const CourseDetailInfo: React.FC<Props> = ({
 
           <Col span={6}>
             <Text strong>Tahun:</Text>
-            <div className="mt-1 p-2 bg-gray-50 rounded">{courseInfo.year}</div>
+            <div className="mt-1 p-2 bg-gray-50 rounded">
+              {courseInfo.year || "-"}
+            </div>
           </Col>
 
           <Col span={6}>
@@ -157,7 +159,7 @@ export const CourseDetailInfo: React.FC<Props> = ({
           <Col span={6}>
             <Text strong>Dosen:</Text>
             <div className="mt-1 p-2 bg-gray-50 rounded">
-              {courseInfo.lecturer || "Belum diset"}
+              {courseInfo.lecturer || `${user}`}
             </div>
           </Col>
         </Row>
@@ -187,13 +189,7 @@ export const CourseDetailInfo: React.FC<Props> = ({
               </Form.Item>
 
               <Form.Item name="kelas" label="Kelas">
-                <Select style={{ width: 100 }}>
-                  {classes.map((cls) => (
-                    <Option key={cls} value={cls}>
-                      {cls}
-                    </Option>
-                  ))}
-                </Select>
+                <Input style={{ width: 150 }} />
               </Form.Item>
 
               <Form.Item name="lecturer" label="Dosen">

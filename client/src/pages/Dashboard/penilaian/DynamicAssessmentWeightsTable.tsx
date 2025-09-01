@@ -1,4 +1,4 @@
-// components/DynamicAssessmentWeightsTable.tsx - Responsive Version with Yellow Inputs
+// components/DynamicAssessmentWeightsTable.tsx - Updated with Direct CPMK Filtering
 import React from "react";
 import {
   Table,
@@ -6,12 +6,14 @@ import {
   Card,
   Grid,
   Collapse,
-  Form,
   Row,
   Col,
   Divider,
   Typography,
+  Alert,
+  Badge,
 } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
 import type { AssessmentWeights, CurriculumData } from "@/types/interface";
 
 const { useBreakpoint } = Grid;
@@ -47,6 +49,12 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
 }) => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
+
+  // Calculate total filtered CPMK count for info display
+  const totalFilteredCPMK = relatedCPL.reduce(
+    (total, cpl) => total + getRelatedCPMK(cpl).length,
+    0
+  );
 
   const buildColumns = () => {
     interface AssessmentColumn {
@@ -102,16 +110,16 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
       },
     ];
 
-    // Add CPL columns with proper hierarchy
+    // Add CPL columns with filtered CPMK only
     relatedCPL.forEach((cpl) => {
-      const relatedCPMK = getRelatedCPMK(cpl);
+      const relatedCPMK = getRelatedCPMK(cpl); // This now returns only direct CPMK
       const cplCode = curriculumData?.cpl?.[cpl]?.kode || cpl;
 
       if (relatedCPMK.length === 0) {
-        return; // Skip CPL without CPMK
+        return; // Skip CPL without direct CPMK
       }
 
-      // Create CPMK columns for this CPL
+      // Create CPMK columns for this CPL (only filtered CPMK)
       const cpmkChildren: AssessmentColumn[] = relatedCPMK.map((cpmk) => {
         const cpmkCode = curriculumData?.cpmk?.[cpmk]?.kode || cpmk;
         const relatedSubCPMK = getRelatedSubCPMK(cpmk);
@@ -138,8 +146,9 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                   textAlign: "center",
                   fontWeight: "500",
                   fontSize: isMobile ? "10px" : "11px",
+                  // backgroundColor: "#fef3c7",
                 },
-                className: "bg-blue-50",
+                className: "border-yellow-300",
               }),
               onCell: (record) => ({
                 style: {
@@ -166,15 +175,20 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                   <Input
                     type="number"
                     value={(value as number) || 0}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      let val = Number(e.target.value);
+
+                      if (val > 100) val = 100;
+                      if (val < 0) val = 0;
+
                       updateAssessmentWeight(
                         cpl,
                         cpmk,
                         record.key,
-                        Number(e.target.value) || 0,
+                        val,
                         subCpmk
-                      )
-                    }
+                      );
+                    }}
                     min={0}
                     max={100}
                     size="small"
@@ -182,7 +196,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                     style={{
                       height: isMobile ? "20px" : "24px",
                       fontSize: isMobile ? "10px" : "11px",
-                      backgroundColor: "#fde047", // yellow-300
+                      backgroundColor: "#fde047",
                     }}
                   />
                 );
@@ -197,7 +211,14 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                   isMobile ? "text-xs" : "text-sm"
                 }`}
               >
-                {cpmkCode}
+                <div className="flex items-center justify-center gap-1">
+                  <span>{cpmkCode}</span>
+                  {/* <Badge
+                    count="MK"
+                    size="small"
+                    style={{ backgroundColor: "#10b981", fontSize: "10px" }}
+                  /> */}
+                </div>
               </div>
             ),
             children: subCpmkColumns,
@@ -210,7 +231,14 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
               <div
                 className={`text-center ${isMobile ? "text-xs" : "text-sm"}`}
               >
-                {cpmkCode}
+                <div className="flex items-center justify-center gap-1">
+                  <span>{cpmkCode}</span>
+                  {/* <Badge
+                    count="MK"
+                    size="small"
+                    style={{ backgroundColor: "#10b981", fontSize: "10px" }}
+                  /> */}
+                </div>
               </div>
             ),
             dataIndex: `${cpl}_${cpmk}`,
@@ -222,8 +250,9 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                 textAlign: "center",
                 fontWeight: "500",
                 fontSize: isMobile ? "11px" : "13px",
+                backgroundColor: "#fef3c7", // yellow-100 for filtered content
               },
-              className: "bg-yellow-100",
+              className: "border-yellow-300",
             }),
             onCell: (record) => ({
               style: {
@@ -237,7 +266,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
               if (record.key === "presentase") {
                 return (
                   <div
-                    className={`text-center font-medium py-1 bg-blue-100 ${
+                    className={`text-center font-medium py-1 ${
                       isMobile ? "text-xs" : "text-sm"
                     }`}
                   >
@@ -250,22 +279,22 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                 <Input
                   type="number"
                   value={value || 0}
-                  onChange={(e) =>
-                    updateAssessmentWeight(
-                      cpl,
-                      cpmk,
-                      record.key,
-                      Number(e.target.value) || 0
-                    )
-                  }
+                  onChange={(e) => {
+                    let val = Number(e.target.value);
+
+                    if (val > 100) val = 100;
+                    if (val < 0) val = 0;
+
+                    updateAssessmentWeight(cpl, cpmk, record.key, val);
+                  }}
                   min={0}
                   max={100}
                   size="small"
-                  className="text-center bg-yellow-300"
+                  className="text-center"
                   style={{
                     height: isMobile ? "22px" : "28px",
                     fontSize: isMobile ? "11px" : "12px",
-                    backgroundColor: "#fde047", // yellow-300
+                    backgroundColor: "#fde047",
                   }}
                 />
               );
@@ -274,13 +303,14 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
         }
       });
 
-      // Add CPL header with CPMK children
+      // Add CPL header with filtered CPMK children
       columns.push({
         title: (
           <div className="text-center">
-            <div className={`font-bold ${isMobile ? "text-sm" : "text-lg"}`}>
+            <div className={`font-bold ${isMobile ? "text-sm" : "text-sm"}`}>
               {cplCode}
             </div>
+            {/* x */}
           </div>
         ),
         children: cpmkChildren,
@@ -346,7 +376,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
   const buildDataSource = () => {
     const data: any[] = [];
 
-    // Build assessment type rows
+    // Build assessment type rows (only for filtered CPMK)
     assessmentTypes.forEach((assessmentType) => {
       const row: any = {
         key: assessmentType,
@@ -356,7 +386,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
 
       let totalForType = 0;
       relatedCPL.forEach((cpl) => {
-        const relatedCPMK = getRelatedCPMK(cpl);
+        const relatedCPMK = getRelatedCPMK(cpl); // Already filtered
         relatedCPMK.forEach((cpmk) => {
           const relatedSubCPMK = getRelatedSubCPMK(cpmk);
 
@@ -393,7 +423,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
 
     let grandTotal = 0;
     relatedCPL.forEach((cpl) => {
-      const relatedCPMK = getRelatedCPMK(cpl);
+      const relatedCPMK = getRelatedCPMK(cpl); // Already filtered
       relatedCPMK.forEach((cpmk) => {
         const relatedSubCPMK = getRelatedSubCPMK(cpmk);
 
@@ -432,7 +462,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
     return data;
   };
 
-  // Mobile Form-based Interface
+  // Mobile Form-based Interface (updated for filtered CPMK)
   const MobileAssessmentForm = () => {
     return (
       <div className="space-y-4">
@@ -442,19 +472,46 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
 
         {relatedCPL.map((cpl) => {
           const cplCode = curriculumData?.cpl?.[cpl]?.kode || cpl;
-          const relatedCPMK = getRelatedCPMK(cpl);
+          const relatedCPMK = getRelatedCPMK(cpl); // Already filtered
 
           if (relatedCPMK.length === 0) return null;
 
           return (
-            <Card key={cpl} title={`CPL: ${cplCode}`} size="small">
+            <Card
+              key={cpl}
+              title={
+                <div className="flex items-center justify-between">
+                  <span>CPL: {cplCode}</span>
+                  <Badge
+                    count={`${relatedCPMK.length} CPMK`}
+                    style={{ backgroundColor: "#10b981" }}
+                  />
+                </div>
+              }
+              size="small"
+            >
               <Collapse accordion>
                 {relatedCPMK.map((cpmk) => {
                   const cpmkCode = curriculumData?.cpmk?.[cpmk]?.kode || cpmk;
                   const relatedSubCPMK = getRelatedSubCPMK(cpmk);
 
                   return (
-                    <Panel header={`CPMK: ${cpmkCode}`} key={cpmk}>
+                    <Panel
+                      header={
+                        <div className="flex items-center gap-2">
+                          <span>CPMK: {cpmkCode}</span>
+                          <Badge
+                            count="MK"
+                            size="small"
+                            style={{
+                              backgroundColor: "#10b981",
+                              fontSize: "10px",
+                            }}
+                          />
+                        </div>
+                      }
+                      key={cpmk}
+                    >
                       {hasSubCPMKData && relatedSubCPMK.length > 0 ? (
                         // Sub-CPMK Mode
                         <div className="space-y-4">
@@ -466,7 +523,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                             return (
                               <div
                                 key={subCpmk}
-                                className="p-3 bg-gray-50 rounded"
+                                className="p-3 bg-gray-50 rounded border-l-4 border-yellow-400"
                               >
                                 <Text strong className="block mb-2 text-sm">
                                   Sub-CPMK: {subCpmkCode}
@@ -491,19 +548,23 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                                           <Input
                                             type="number"
                                             value={weight}
-                                            onChange={(e) =>
+                                            onChange={(e) => {
+                                              let val = Number(e.target.value);
+
+                                              if (val > 100) val = 100;
+                                              if (val < 0) val = 0;
+
                                               updateAssessmentWeight(
                                                 cpl,
                                                 cpmk,
                                                 assessmentType,
-                                                Number(e.target.value) || 0,
+                                                val,
                                                 subCpmk
-                                              )
-                                            }
+                                              );
+                                            }}
                                             min={0}
                                             max={100}
                                             size="small"
-                                            suffix="%"
                                             className="bg-yellow-300"
                                             style={{
                                               backgroundColor: "#fde047",
@@ -535,7 +596,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                         </div>
                       ) : (
                         // Direct CPMK Mode
-                        <div className="space-y-3">
+                        <div className="space-y-3 border-l-4 border-yellow-400 pl-3">
                           <Row gutter={[8, 8]}>
                             {assessmentTypes.map((assessmentType) => {
                               const weight =
@@ -567,7 +628,9 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                                       size="small"
                                       suffix="%"
                                       className="bg-yellow-300"
-                                      style={{ backgroundColor: "#fde047" }}
+                                      style={{
+                                        backgroundColor: "#fde047",
+                                      }}
                                     />
                                   </div>
                                 </Col>
@@ -579,9 +642,9 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                             <Text type="secondary">Total:</Text>
                             <Text strong>
                               {assessmentTypes.reduce((sum, type) => {
-                                //@ts-ignore
                                 return (
                                   sum +
+                                  //@ts-ignore
                                   (assessmentWeights[cpl]?.[cpmk]?.[type] || 0)
                                 );
                               }, 0)}
@@ -604,7 +667,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
             {assessmentTypes.map((assessmentType) => {
               let totalForType = 0;
               relatedCPL.forEach((cpl) => {
-                const relatedCPMK = getRelatedCPMK(cpl);
+                const relatedCPMK = getRelatedCPMK(cpl); // Already filtered
                 relatedCPMK.forEach((cpmk) => {
                   const relatedSubCPMK = getRelatedSubCPMK(cpmk);
 
@@ -646,7 +709,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                   assessmentTypes.reduce((sum, type) => {
                     let totalForType = 0;
                     relatedCPL.forEach((cpl) => {
-                      const relatedCPMK = getRelatedCPMK(cpl);
+                      const relatedCPMK = getRelatedCPMK(cpl); // Already filtered
                       relatedCPMK.forEach((cpmk) => {
                         const relatedSubCPMK = getRelatedSubCPMK(cpmk);
                         if (hasSubCPMKData && relatedSubCPMK.length > 0) {
@@ -675,7 +738,7 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
                 {assessmentTypes.reduce((sum, type) => {
                   let totalForType = 0;
                   relatedCPL.forEach((cpl) => {
-                    const relatedCPMK = getRelatedCPMK(cpl);
+                    const relatedCPMK = getRelatedCPMK(cpl); // Already filtered
                     relatedCPMK.forEach((cpmk) => {
                       const relatedSubCPMK = getRelatedSubCPMK(cpmk);
                       if (hasSubCPMKData && relatedSubCPMK.length > 0) {
@@ -706,8 +769,36 @@ export const DynamicAssessmentWeightsTable: React.FC<Props> = ({
     );
   };
 
+  // Show empty state if no filtered CPMK
+  if (totalFilteredCPMK === 0) {
+    return (
+      <div className="text-center py-8">
+        <Alert
+          message="Tidak Ada CPMK Terkait Langsung"
+          description="Mata kuliah ini tidak memiliki CPMK yang terkait secara langsung. Hubungi prodi untuk menambahkan relasi CPMK dengan mata kuliah ini."
+          type="warning"
+          icon={<InfoCircleOutlined />}
+          showIcon
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
+      {/* Info alert for desktop */}
+      {/* {!isMobile && totalFilteredCPMK > 0 && (
+        <Alert
+          message={`Menampilkan ${totalFilteredCPMK} CPMK yang terkait langsung dengan mata kuliah ini`}
+          description="Badge 'MK' menunjukkan CPMK yang secara langsung berhubungan dengan mata kuliah ini."
+          type="info"
+          icon={<InfoCircleOutlined />}
+          showIcon
+          closable
+          className="mb-4"
+        />
+      )} */}
+
       {isMobile ? (
         <MobileAssessmentForm />
       ) : (

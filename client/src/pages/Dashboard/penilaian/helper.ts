@@ -1,4 +1,4 @@
-// utils/helpers.ts - Enhanced Version
+// utils/helpers.ts - Enhanced Version with Direct MK-CPMK Relations
 import type {
   Student,
   CurriculumData,
@@ -58,7 +58,8 @@ export const GRADE_SCALE = [
 
 export const DEFAULT_COURSE_INFO: CourseInfo = {
   semester: 1,
-  year: "2024/2025",
+  year: "",
+  kelas: "",
   lecturer: "",
 };
 
@@ -120,22 +121,6 @@ export const getPerformanceIndicator = (
   }
 };
 
-// Get CPMK weight percentage
-export const getCpmkWeight = (cpmk: string): string => {
-  switch (cpmk) {
-    case "CPMK-5":
-      return "15%";
-    case "CPMK-22":
-      return "15%";
-    case "CPMK-23":
-      return "30%";
-    case "CPMK-24":
-      return "40%";
-    default:
-      return "25%"; // Default equal distribution
-  }
-};
-
 // Enhanced utility function to get description
 const getDescription = (item: any): string => {
   return (
@@ -156,7 +141,7 @@ const getProdi = (item: any): string => {
   );
 };
 
-// Transform API data to curriculum data structure - ENHANCED VERSION
+// Transform API data to curriculum data structure - ENHANCED VERSION with Sequelize Relations
 export const transformApiDataToCurriculumData = (
   apiData: any[]
 ): CurriculumData => {
@@ -165,35 +150,39 @@ export const transformApiDataToCurriculumData = (
   const cpmk: Record<string, CPMK> = {};
   const subcpmk: Record<string, SubCPMK> = {};
 
-  console.log("Raw API Data:", apiData);
+  console.log("Raw API Data (Sequelize structure):", apiData);
 
   apiData.forEach((mk) => {
     const mkCode = mk.kode || mk.id.toString();
 
-    // Initialize mata kuliah with enhanced fields
+    // Initialize mata kuliah with enhanced fields including direct CPMK relations
     mata_kuliah[mkCode] = {
       id: mk.id.toString(),
       nama: mk.nama || "Unknown Course",
       sks: mk.sks || 3,
-      universitas: mk.universitas || "Unknown University",
+      universitas: mk.universitas || "Universitas Pelita Bangsa",
       jenis: mk.jenis || "Unknown Type",
       semester: mk.semester || 1,
       related_cpl: [],
+      related_cpmk: [], // Direct CPMK relations - will be populated below
       prodi: getProdi(mk), // Enhanced prodi extraction
       deskripsi: getDescription(mk), // Add description
     };
 
-    console.log(`Processing MK: ${mkCode}`, mk);
+    // Track direct CPMK relations for this MK
+    const directCPMKRelations: string[] = [];
+    const relatedCPLs: Set<string> = new Set();
 
-    // Process CPMK array
+    // Process CPMK array (Sequelize association result)
     if (mk.cpmk && Array.isArray(mk.cpmk)) {
       mk.cpmk.forEach((cpmkItem: any) => {
         const cpmkCode = cpmkItem.kode || cpmkItem.id.toString();
         const relatedSubCpmk: string[] = [];
 
-        console.log(`Processing CPMK: ${cpmkCode}`, cpmkItem);
+        // Add this CPMK to direct relations for this MK
+        directCPMKRelations.push(cpmkCode);
 
-        // Process Sub-CPMK if exists
+        // Process Sub-CPMK if exists (Sequelize association)
         if (cpmkItem.subcpmk && Array.isArray(cpmkItem.subcpmk)) {
           cpmkItem.subcpmk.forEach((subCpmkItem: any) => {
             const subCpmkCode = subCpmkItem.kode || subCpmkItem.id.toString();
@@ -201,77 +190,85 @@ export const transformApiDataToCurriculumData = (
             subcpmk[subCpmkCode] = {
               id: subCpmkItem.id.toString(),
               kode: subCpmkCode,
-              description: getDescription(subCpmkItem), // Enhanced description
-              deskripsi: getDescription(subCpmkItem), // Alternative field
+              description: getDescription(subCpmkItem),
+              deskripsi: getDescription(subCpmkItem),
               cpmkId: cpmkCode,
             };
 
             relatedSubCpmk.push(subCpmkCode);
-            console.log(
-              `Added SubCPMK: ${subCpmkCode} with description: ${getDescription(
-                subCpmkItem
-              )}`
-            );
+            console.log(`Added SubCPMK: ${subCpmkCode} for CPMK: ${cpmkCode}`);
           });
         }
 
         // Initialize CPMK with enhanced fields
-        cpmk[cpmkCode] = {
-          id: cpmkItem.id.toString(),
-          kode: cpmkCode,
-          description: getDescription(cpmkItem), // Enhanced description
-          deskripsi: getDescription(cpmkItem), // Alternative field
-          related_subcpmk: relatedSubCpmk,
-          related_cpl: [], // Will be populated from CPL array
-        };
+        if (!cpmk[cpmkCode]) {
+          cpmk[cpmkCode] = {
+            id: cpmkItem.id.toString(),
+            kode: cpmkCode,
+            description: getDescription(cpmkItem),
+            deskripsi: getDescription(cpmkItem),
+            related_subcpmk: relatedSubCpmk,
+            related_cpl: [],
+          };
+        } else {
+          // Merge subcpmk if CPMK already exists
+          const existingSubCpmk = cpmk[cpmkCode].related_subcpmk;
+          relatedSubCpmk.forEach((subCpmk) => {
+            if (!existingSubCpmk.includes(subCpmk)) {
+              existingSubCpmk.push(subCpmk);
+            }
+          });
+        }
 
-        // Process CPL array
+        // Process CPL array (Sequelize association through junction table)
         if (cpmkItem.cpl && Array.isArray(cpmkItem.cpl)) {
           cpmkItem.cpl.forEach((cplItem: any) => {
             const cplCode = cplItem.kode || cplItem.id.toString();
 
-            console.log(`Processing CPL: ${cplCode} for CPMK: ${cpmkCode}`);
+            // Add to related CPLs for this MK
+            relatedCPLs.add(cplCode);
 
             // Initialize CPL if not exists with enhanced fields
             if (!cpl[cplCode]) {
               cpl[cplCode] = {
                 id: cplItem.id.toString(),
                 kode: cplCode,
-                description: getDescription(cplItem), // Enhanced description
-                deskripsi: getDescription(cplItem), // Alternative field
+                description: getDescription(cplItem),
+                deskripsi: getDescription(cplItem),
                 related_cpmk: [],
               };
-              console.log(
-                `Created new CPL: ${cplCode} with description: ${getDescription(
-                  cplItem
-                )}`
-              );
             }
 
             // Add CPMK to CPL's related_cpmk if not already there
             if (!cpl[cplCode].related_cpmk.includes(cpmkCode)) {
               cpl[cplCode].related_cpmk.push(cpmkCode);
-              console.log(`Added CPMK ${cpmkCode} to CPL ${cplCode}`);
             }
 
             // Add CPL to CPMK's related_cpl if not already there
             if (!cpmk[cpmkCode].related_cpl.includes(cplCode)) {
               cpmk[cpmkCode].related_cpl.push(cplCode);
-              console.log(`Added CPL ${cplCode} to CPMK ${cpmkCode}`);
-            }
-
-            // Add CPL to MK's related_cpl if not already there
-            if (!mata_kuliah[mkCode].related_cpl.includes(cplCode)) {
-              mata_kuliah[mkCode].related_cpl.push(cplCode);
-              console.log(`Added CPL ${cplCode} to MK ${mkCode}`);
             }
           });
         } else {
-          console.warn(`CPMK ${cpmkCode} has no CPL array or invalid CPL data`);
+          console.warn(
+            `CPMK ${cpmkCode} has no CPL association or invalid CPL data`
+          );
         }
       });
+
+      // Set direct CPMK relations for this MK (only CPMK directly associated)
+      mata_kuliah[mkCode].related_cpmk = directCPMKRelations;
+
+      // Set CPL relations for this MK (collected from CPMK associations)
+      mata_kuliah[mkCode].related_cpl = Array.from(relatedCPLs);
+
+      console.log(
+        `MK ${mkCode} has direct CPMK relations:`,
+        directCPMKRelations
+      );
+      console.log(`MK ${mkCode} has CPL relations:`, Array.from(relatedCPLs));
     } else {
-      console.warn(`MK ${mkCode} has no CPMK array or invalid CPMK data`);
+      console.warn(`MK ${mkCode} has no CPMK association or invalid CPMK data`);
     }
   });
 
@@ -289,11 +286,72 @@ export const transformApiDataToCurriculumData = (
     assessment_weights: {},
   };
 
-  console.log("Transformed curriculum data:", result);
-  console.log("CPL data with descriptions:", cpl);
-  console.log("CPMK data with descriptions:", cpmk);
-  console.log("SubCPMK data with descriptions:", subcpmk);
-  console.log("Mata Kuliah data with prodi:", mata_kuliah);
+  // Debug log untuk memeriksa hasil transformasi
+  console.log("=== TRANSFORMATION RESULTS ===");
+  console.log("Transformed mata_kuliah:", mata_kuliah);
+  console.log("Transformed cpl:", cpl);
+  console.log("Transformed cpmk:", cpmk);
+  console.log("=== END TRANSFORMATION ===");
 
   return result;
+};
+
+// Helper function to get direct CPMK relations for a course
+export const getDirectCPMKForCourse = (
+  courseCode: string,
+  curriculumData: CurriculumData | null
+): string[] => {
+  if (!curriculumData || !courseCode) return [];
+
+  const courseData = curriculumData.mata_kuliah[courseCode];
+  if (courseData?.related_cpmk && courseData.related_cpmk.length > 0) {
+    console.log(`Direct CPMK for ${courseCode}:`, courseData.related_cpmk);
+    return courseData.related_cpmk;
+  }
+
+  console.warn(`No direct CPMK relations found for course: ${courseCode}`);
+  return [];
+};
+
+// Helper function to get filtered CPMK for a specific CPL based on course
+export const getFilteredCPMKForCPL = (
+  cplCode: string,
+  courseCode: string,
+  curriculumData: CurriculumData | null
+): string[] => {
+  if (!curriculumData || !cplCode || !courseCode) return [];
+
+  // Get direct CPMK relations for the course
+  const directCourseCPMK = getDirectCPMKForCourse(courseCode, curriculumData);
+
+  // Get all CPMK that belong to this CPL
+  const cplCPMK = curriculumData.cpl[cplCode]?.related_cpmk || [];
+
+  // Return intersection - only CPMK that are both in CPL and directly related to course
+  const filteredCPMK = directCourseCPMK.filter((cpmk) =>
+    cplCPMK.includes(cpmk)
+  );
+
+  console.log(
+    `Filtered CPMK for CPL ${cplCode} in course ${courseCode}:`,
+    filteredCPMK
+  );
+  return filteredCPMK;
+};
+
+// Validation function to check if course has direct CPMK relations
+export const validateCourseHasDirectCPMK = (
+  courseCode: string,
+  curriculumData: CurriculumData | null
+): boolean => {
+  const directCPMK = getDirectCPMKForCourse(courseCode, curriculumData);
+  const hasDirectRelations = directCPMK.length > 0;
+
+  if (!hasDirectRelations) {
+    console.warn(
+      `Course ${courseCode} has no direct CPMK relations. Consider adding related_cpmk field to the course data.`
+    );
+  }
+
+  return hasDirectRelations;
 };

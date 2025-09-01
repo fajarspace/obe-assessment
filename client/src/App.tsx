@@ -13,15 +13,9 @@ import ProtectedRoute from "./routes/protectedRoute";
 import { ConfigProvider } from "antd";
 import Pl from "./pages/Dashboard/pl";
 import Cpl from "./pages/Dashboard/cpl";
-
 import Mk from "./pages/Dashboard/mk";
 import Cpmk from "./pages/Dashboard/cpmk";
-
 import Subcpmk from "./pages/Dashboard/subcpmk";
-import AssessmentTable from "./pages/Dashboard/rubrik-penilaian/AssessmentTable";
-import SimpleOBEAssessment from "./pages/Dashboard/rubrik-penilaian";
-
-// import GradingAssessmentTable from "./main";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement

@@ -7,8 +7,15 @@ const cpmkController = {
     try {
       const userId = req.user?.id;
 
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized: userId tidak ditemukan",
+        });
+      }
+
       const cpmks = await CPMK.findAll({
-        where: { userId },
+        where: { userId }, // filter sesuai user login
         include: [
           {
             model: CPL,

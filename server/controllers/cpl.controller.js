@@ -7,13 +7,20 @@ const cplController = {
     try {
       const userId = req.user?.id;
 
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized: userId tidak ditemukan",
+        });
+      }
+
       const cpls = await CPL.findAll({
-        where: { userId },
+        where: { userId }, // hanya ambil CPL milik user ini
         include: [
           {
             model: PL,
             as: "pl",
-            through: { attributes: [] }, // Menghilangkan atribut junction table
+            through: { attributes: [] },
           },
           {
             model: MK,

@@ -11,12 +11,10 @@ import {
   Space,
   Typography,
   Modal,
-  Popconfirm,
   Tag,
   Grid,
   Drawer,
   List,
-  Divider,
   Row,
   Col,
   Collapse,
@@ -24,7 +22,6 @@ import {
 import {
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined,
   SaveOutlined,
   ReloadOutlined,
   EyeOutlined,
@@ -70,10 +67,10 @@ const SUBCPMKManagement: React.FC = () => {
   // Relation selections
   const [selectedCPMKs, setSelectedCPMKs] = useState<number[]>([]);
 
-  // Matrix view state
-  const [matrixRelations, setMatrixRelations] = useState<
-    Record<string, boolean>
-  >({});
+  // Matrix loading states for individual checkboxes
+  const [matrixLoading, setMatrixLoading] = useState<Record<string, boolean>>(
+    {}
+  );
 
   // Check if mobile
   const isMobile = !screens.md;
@@ -82,13 +79,6 @@ const SUBCPMKManagement: React.FC = () => {
   useEffect(() => {
     fetchAllData();
   }, []);
-
-  useEffect(() => {
-    // Update matrix relations when data changes
-    if (viewMode === "matrix") {
-      updateMatrixRelations();
-    }
-  }, [subcpmks, cpmks, viewMode]);
 
   const fetchAllData = async () => {
     setTableLoading(true);
@@ -107,58 +97,72 @@ const SUBCPMKManagement: React.FC = () => {
     }
   };
 
-  const updateMatrixRelations = () => {
-    const relations: Record<string, boolean> = {};
-
-    subcpmks.forEach((subcpmk) => {
-      cpmks.forEach((cpmk) => {
-        const key = `${subcpmk.id}-${cpmk.id}`;
-        relations[key] = subcpmk.cpmk?.some((c) => c.id === cpmk.id) || false;
-      });
-    });
-
-    setMatrixRelations(relations);
-  };
-
+  // Optimized relation update function
   const handleMatrixChange = async (
     subcpmkId: number,
     cpmkId: number,
     checked: boolean
   ) => {
-    const key = `${subcpmkId}-${cpmkId}`;
+    const loadingKey = `${subcpmkId}-${cpmkId}`;
 
     try {
-      // Update local state immediately for better UX
-      setMatrixRelations((prev) => ({
-        ...prev,
-        [key]: checked,
-      }));
+      // Set loading state for this specific checkbox
+      setMatrixLoading((prev) => ({ ...prev, [loadingKey]: true }));
 
       // Get current relations for this SUBCPMK
-      const subcpmk = subcpmks.find((s) => s.id === subcpmkId);
-      const currentCpmkIds = subcpmk?.cpmk?.map((c) => c.id) || [];
+      const currentSubcpmk = subcpmks.find((s) => s.id === subcpmkId);
+      if (!currentSubcpmk) {
+        throw new Error("Sub CPMK tidak ditemukan");
+      }
 
+      const currentCpmkIds = currentSubcpmk.cpmk?.map((c) => c.id) || [];
+
+      // Calculate new IDs array
       let newCpmkIds: number[];
       if (checked) {
-        newCpmkIds = [...currentCpmkIds, cpmkId];
+        // Add if not already present
+        newCpmkIds = currentCpmkIds.includes(cpmkId)
+          ? currentCpmkIds
+          : [...currentCpmkIds, cpmkId];
       } else {
+        // Remove if present
         newCpmkIds = currentCpmkIds.filter((id) => id !== cpmkId);
       }
 
-      // Update via API using PATCH request
+      // Prepare update data
       const updateData = { cpmkIds: newCpmkIds };
-      await subcpmkApi.update(subcpmkId, updateData);
 
-      // Refresh data to ensure consistency
-      await fetchAllData();
-      message.success("Relasi berhasil diperbarui");
-    } catch (error) {
-      // Revert local state on error
-      setMatrixRelations((prev) => ({
-        ...prev,
-        [key]: !checked,
-      }));
-      message.error("Gagal memperbarui relasi");
+      // Update via API
+      const response = await subcpmkApi.update(subcpmkId, updateData);
+
+      if (response.success && response.data) {
+        // Update local state with the response data
+        setSubcpmks((prevSubcpmks) =>
+          prevSubcpmks.map((subcpmk) =>
+            subcpmk.id === subcpmkId ? response.data! : subcpmk
+          )
+        );
+
+        // Show success message
+        message.success(`Relasi CPMK ${checked ? "ditambahkan" : "dihapus"}`);
+      } else {
+        throw new Error(response.message || "Update failed");
+      }
+    } catch (error: any) {
+      console.error("Matrix update error:", error);
+      message.error(
+        `Gagal memperbarui relasi: ${error.message || "Unknown error"}`
+      );
+
+      // Optionally refresh data on error to ensure consistency
+      fetchAllData();
+    } finally {
+      // Remove loading state
+      setMatrixLoading((prev) => {
+        const newState = { ...prev };
+        delete newState[loadingKey];
+        return newState;
+      });
     }
   };
 
@@ -210,29 +214,31 @@ const SUBCPMKManagement: React.FC = () => {
         cpmkIds: selectedCPMKs,
       };
 
+      let response;
       if (modalMode === "create") {
-        const response = await subcpmkApi.create(
-          requestData as CreateSUBCPMKRequest
-        );
+        response = await subcpmkApi.create(requestData as CreateSUBCPMKRequest);
         if (response.success) {
           message.success("Sub CPMK berhasil dibuat");
-          setIsModalVisible(false);
-          fetchAllData();
         }
       } else if (modalMode === "edit" && editingSubCPMK) {
-        const response = await subcpmkApi.update(
+        response = await subcpmkApi.update(
           editingSubCPMK.id,
           requestData as UpdateSUBCPMKRequest
         );
         if (response.success) {
           message.success("Sub CPMK berhasil diperbarui");
-          setIsModalVisible(false);
-          fetchAllData();
         }
       }
-    } catch (error) {
+
+      if (response?.success) {
+        setIsModalVisible(false);
+        await fetchAllData(); // Refresh data after create/edit
+      }
+    } catch (error: any) {
       message.error(
-        `Gagal ${modalMode === "create" ? "membuat" : "memperbarui"} Sub CPMK`
+        `Gagal ${
+          modalMode === "create" ? "membuat" : "memperbarui"
+        } Sub CPMK: ${error.message || "Unknown error"}`
       );
     } finally {
       setLoading(false);
@@ -248,27 +254,35 @@ const SUBCPMKManagement: React.FC = () => {
       width: 150,
       render: (kode: string) => <Tag color="gray">{kode}</Tag>,
     },
-    // {
-    //   title: "CPMK Terkait",
-    //   dataIndex: "cpmk",
-    //   key: "cpmk",
-    //   width: 200,
-    //   render: (cpmkList: CPMK[]) => (
-    //     <div className="flex flex-wrap gap-1">
-    //       {cpmkList?.map((cpmk) => (
-    //         <Tag key={cpmk.id} color="gray">
-    //           {cpmk.kode}
-    //         </Tag>
-    //       )) || <Text type="secondary">-</Text>}
-    //     </div>
-    //   ),
-    // },
     {
       title: "Deskripsi",
       dataIndex: "deskripsi",
       key: "deskripsi",
       ellipsis: true,
       width: 250,
+    },
+    {
+      title: "CPMK Terkait",
+      key: "relations",
+      width: 200,
+      render: (record: SUBCPMK) => (
+        <div>
+          {record.cpmk?.length ? (
+            <div>
+              {record.cpmk.slice(0, 2).map((cpmk) => (
+                <Tag key={cpmk.id} color="blue" style={{ marginBottom: 2 }}>
+                  {cpmk.kode}
+                </Tag>
+              ))}
+              {record.cpmk.length > 2 && (
+                <Tag color="default">+{record.cpmk.length - 2} lainnya</Tag>
+              )}
+            </div>
+          ) : (
+            <Text type="secondary">-</Text>
+          )}
+        </div>
+      ),
     },
     {
       title: "Aksi",
@@ -293,7 +307,7 @@ const SUBCPMKManagement: React.FC = () => {
     },
   ];
 
-  // Matrix view columns
+  // Matrix view columns with loading states
   const matrixColumns = [
     {
       title: "No",
@@ -316,13 +330,19 @@ const SUBCPMKManagement: React.FC = () => {
       width: 80,
       align: "center" as const,
       render: (_: any, record: SUBCPMK) => {
-        const key = `${record.id}-${cpmk.id}`;
+        // Use actual data instead of matrix state for more reliability
+        const isChecked = record.cpmk?.some((c) => c.id === cpmk.id) || false;
+        const loadingKey = `${record.id}-${cpmk.id}`;
+        const isLoading = matrixLoading[loadingKey];
+
         return (
           <Checkbox
-            checked={matrixRelations[key] || false}
+            checked={isChecked}
+            disabled={isLoading}
             onChange={(e) =>
               handleMatrixChange(record.id, cpmk.id, e.target.checked)
             }
+            style={isLoading ? { opacity: 0.6 } : {}}
           />
         );
       },
@@ -367,7 +387,11 @@ const SUBCPMKManagement: React.FC = () => {
                   {item.cpmk?.length ? (
                     <div style={{ marginTop: 4 }}>
                       {item.cpmk.map((cpmk) => (
-                        <Tag key={cpmk.id} color="gray">
+                        <Tag
+                          key={cpmk.id}
+                          color="blue"
+                          style={{ marginBottom: 2 }}
+                        >
                           {cpmk.kode}
                         </Tag>
                       ))}
@@ -392,7 +416,7 @@ const SUBCPMKManagement: React.FC = () => {
     />
   );
 
-  // Mobile Matrix Component
+  // Mobile Matrix Component with loading states
   const MobileMatrix = () => (
     <Collapse accordion>
       {subcpmks.map((subcpmk) => (
@@ -416,7 +440,11 @@ const SUBCPMKManagement: React.FC = () => {
             </Text>
             <Row gutter={[8, 8]}>
               {cpmks.map((cpmk) => {
-                const key = `${subcpmk.id}-${cpmk.id}`;
+                const isChecked =
+                  subcpmk.cpmk?.some((c) => c.id === cpmk.id) || false;
+                const loadingKey = `${subcpmk.id}-${cpmk.id}`;
+                const isLoading = matrixLoading[loadingKey];
+
                 return (
                   <Col span={12} key={cpmk.id}>
                     <div
@@ -428,7 +456,8 @@ const SUBCPMKManagement: React.FC = () => {
                       }}
                     >
                       <Checkbox
-                        checked={matrixRelations[key] || false}
+                        checked={isChecked}
+                        disabled={isLoading}
                         onChange={(e) =>
                           handleMatrixChange(
                             subcpmk.id,
@@ -438,7 +467,16 @@ const SUBCPMKManagement: React.FC = () => {
                         }
                         style={{ width: "100%" }}
                       >
-                        <Text style={{ fontSize: "12px" }}>{cpmk.kode}</Text>
+                        <Text style={{ fontSize: "12px" }}>
+                          {isLoading ? (
+                            <span style={{ opacity: 0.6 }}>
+                              {cpmk.kode}{" "}
+                              <span className="animate-pulse">...</span>
+                            </span>
+                          ) : (
+                            cpmk.kode
+                          )}
+                        </Text>
                       </Checkbox>
                     </div>
                   </Col>

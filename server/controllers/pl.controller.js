@@ -7,13 +7,20 @@ const plController = {
     try {
       const userId = req.user?.id;
 
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized: userId tidak ditemukan",
+        });
+      }
+
       const pls = await PL.findAll({
-        where: { userId },
+        where: { userId }, // filter berdasarkan user yang login
         include: [
           {
             model: CPL,
             as: "cpl",
-            through: { attributes: [] },
+            through: { attributes: [] }, // hilangkan atribut dari tabel pivot
           },
         ],
       });

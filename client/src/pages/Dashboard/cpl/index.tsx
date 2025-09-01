@@ -77,16 +77,10 @@ const CPLManagement: React.FC = () => {
   const [selectedMKs, setSelectedMKs] = useState<number[]>([]);
   const [selectedCPMKs, setSelectedCPMKs] = useState<number[]>([]);
 
-  // Matrix view states
-  const [matrixRelationsPL, setMatrixRelationsPL] = useState<
-    Record<string, boolean>
-  >({});
-  const [matrixRelationsMK, setMatrixRelationsMK] = useState<
-    Record<string, boolean>
-  >({});
-  const [matrixRelationsCPMK, setMatrixRelationsCPMK] = useState<
-    Record<string, boolean>
-  >({});
+  // Matrix loading states for individual checkboxes
+  const [matrixLoading, setMatrixLoading] = useState<Record<string, boolean>>(
+    {}
+  );
 
   // Check if mobile/tablet
   const isMobile = !screens.md;
@@ -95,12 +89,6 @@ const CPLManagement: React.FC = () => {
   useEffect(() => {
     fetchAllData();
   }, []);
-
-  useEffect(() => {
-    if (viewMode === "matrix") {
-      updateMatrixRelations();
-    }
-  }, [cpls, pls, mks, cpmks, viewMode]);
 
   const fetchAllData = async () => {
     setTableLoading(true);
@@ -124,71 +112,47 @@ const CPLManagement: React.FC = () => {
     }
   };
 
-  const updateMatrixRelations = () => {
-    const relationsPL: Record<string, boolean> = {};
-    const relationsMK: Record<string, boolean> = {};
-    const relationsCPMK: Record<string, boolean> = {};
-
-    cpls.forEach((cpl) => {
-      pls.forEach((pl) => {
-        const key = `${cpl.id}-${pl.id}`;
-        relationsPL[key] = cpl.pl?.some((p) => p.id === pl.id) || false;
-      });
-
-      mks.forEach((mk) => {
-        const key = `${cpl.id}-${mk.id}`;
-        relationsMK[key] = cpl.mk?.some((m) => m.id === mk.id) || false;
-      });
-
-      cpmks.forEach((cpmk) => {
-        const key = `${cpl.id}-${cpmk.id}`;
-        relationsCPMK[key] = cpl.cpmk?.some((c) => c.id === cpmk.id) || false;
-      });
-    });
-
-    setMatrixRelationsPL(relationsPL);
-    setMatrixRelationsMK(relationsMK);
-    setMatrixRelationsCPMK(relationsCPMK);
-  };
-
+  // Optimized relation update function
   const handleMatrixChange = async (
     cplId: number,
     relatedId: number,
     relationType: "pl" | "mk" | "cpmk",
     checked: boolean
   ) => {
-    const key = `${cplId}-${relatedId}`;
+    const loadingKey = `${cplId}-${relatedId}-${relationType}`;
 
     try {
-      // Update local state immediately
-      if (relationType === "pl") {
-        setMatrixRelationsPL((prev) => ({ ...prev, [key]: checked }));
-      } else if (relationType === "mk") {
-        setMatrixRelationsMK((prev) => ({ ...prev, [key]: checked }));
-      } else if (relationType === "cpmk") {
-        setMatrixRelationsCPMK((prev) => ({ ...prev, [key]: checked }));
-      }
+      // Set loading state for this specific checkbox
+      setMatrixLoading((prev) => ({ ...prev, [loadingKey]: true }));
 
       // Get current relations for this CPL
-      const cpl = cpls.find((c) => c.id === cplId);
-      let currentIds: number[] = [];
-
-      if (relationType === "pl") {
-        currentIds = cpl?.pl?.map((p) => p.id) || [];
-      } else if (relationType === "mk") {
-        currentIds = cpl?.mk?.map((m) => m.id) || [];
-      } else if (relationType === "cpmk") {
-        currentIds = cpl?.cpmk?.map((c) => c.id) || [];
+      const currentCpl = cpls.find((c) => c.id === cplId);
+      if (!currentCpl) {
+        throw new Error("CPL tidak ditemukan");
       }
 
+      let currentIds: number[] = [];
+      if (relationType === "pl") {
+        currentIds = currentCpl.pl?.map((p) => p.id) || [];
+      } else if (relationType === "mk") {
+        currentIds = currentCpl.mk?.map((m) => m.id) || [];
+      } else if (relationType === "cpmk") {
+        currentIds = currentCpl.cpmk?.map((c) => c.id) || [];
+      }
+
+      // Calculate new IDs array
       let newIds: number[];
       if (checked) {
-        newIds = [...currentIds, relatedId];
+        // Add if not already present
+        newIds = currentIds.includes(relatedId)
+          ? currentIds
+          : [...currentIds, relatedId];
       } else {
+        // Remove if present
         newIds = currentIds.filter((id) => id !== relatedId);
       }
 
-      // Update via API using PATCH
+      // Prepare update data
       const updateData: any = {};
       if (relationType === "pl") {
         updateData.plIds = newIds;
@@ -198,19 +162,39 @@ const CPLManagement: React.FC = () => {
         updateData.cpmkIds = newIds;
       }
 
-      await cplApi.update(cplId, updateData);
-      await fetchAllData();
-      message.success("Relasi berhasil diperbarui");
-    } catch (error) {
-      // Revert local state on error
-      if (relationType === "pl") {
-        setMatrixRelationsPL((prev) => ({ ...prev, [key]: !checked }));
-      } else if (relationType === "mk") {
-        setMatrixRelationsMK((prev) => ({ ...prev, [key]: !checked }));
-      } else if (relationType === "cpmk") {
-        setMatrixRelationsCPMK((prev) => ({ ...prev, [key]: !checked }));
+      // Update via API
+      const response = await cplApi.update(cplId, updateData);
+
+      if (response.success && response.data) {
+        // Update local state with the response data
+        setCpls((prevCpls) =>
+          prevCpls.map((cpl) => (cpl.id === cplId ? response.data! : cpl))
+        );
+
+        // Show success message
+        message.success(
+          `Relasi ${relationType.toUpperCase()} ${
+            checked ? "ditambahkan" : "dihapus"
+          }`
+        );
+      } else {
+        throw new Error(response.message || "Update failed");
       }
-      message.error("Gagal memperbarui relasi");
+    } catch (error: any) {
+      console.error("Matrix update error:", error);
+      message.error(
+        `Gagal memperbarui relasi: ${error.message || "Unknown error"}`
+      );
+
+      // Optionally refresh data on error to ensure consistency
+      fetchAllData();
+    } finally {
+      // Remove loading state
+      setMatrixLoading((prev) => {
+        const newState = { ...prev };
+        delete newState[loadingKey];
+        return newState;
+      });
     }
   };
 
@@ -270,27 +254,31 @@ const CPLManagement: React.FC = () => {
         cpmkIds: selectedCPMKs,
       };
 
+      let response;
       if (modalMode === "create") {
-        const response = await cplApi.create(requestData as CreateCPLRequest);
+        response = await cplApi.create(requestData as CreateCPLRequest);
         if (response.success) {
           message.success("CPL berhasil dibuat");
-          setIsModalVisible(false);
-          fetchAllData();
         }
       } else if (modalMode === "edit" && editingCPL) {
-        const response = await cplApi.update(
+        response = await cplApi.update(
           editingCPL.id,
           requestData as UpdateCPLRequest
         );
         if (response.success) {
           message.success("CPL berhasil diperbarui");
-          setIsModalVisible(false);
-          fetchAllData();
         }
       }
-    } catch (error) {
+
+      if (response?.success) {
+        setIsModalVisible(false);
+        await fetchAllData(); // Refresh data after create/edit
+      }
+    } catch (error: any) {
       message.error(
-        `Gagal ${modalMode === "create" ? "membuat" : "memperbarui"} CPL`
+        `Gagal ${modalMode === "create" ? "membuat" : "memperbarui"} CPL: ${
+          error.message || "Unknown error"
+        }`
       );
     } finally {
       setLoading(false);
@@ -316,17 +304,23 @@ const CPLManagement: React.FC = () => {
     // {
     //   title: "Relasi",
     //   key: "relations",
-    //   width: 120,
+    //   width: 150,
     //   render: (record: CPL) => (
-    //     <Space direction="vertical" size={0}>
-    //       <Badge count={record.pl?.length || 0} color="green" showZero>
-    //         <span className="text-xs">PL</span>
+    //     <Space>
+    //       <Badge count={record.pl?.length || 0} color="green" size="small">
+    //         <Text type="secondary" style={{ fontSize: "12px" }}>
+    //           PL
+    //         </Text>
     //       </Badge>
-    //       <Badge count={record.mk?.length || 0} color="blue" showZero>
-    //         <span className="text-xs">MK</span>
+    //       <Badge count={record.mk?.length || 0} color="blue" size="small">
+    //         <Text type="secondary" style={{ fontSize: "12px" }}>
+    //           MK
+    //         </Text>
     //       </Badge>
-    //       <Badge count={record.cpmk?.length || 0} color="orange" showZero>
-    //         <span className="text-xs">CPMK</span>
+    //       <Badge count={record.cpmk?.length || 0} color="orange" size="small">
+    //         <Text type="secondary" style={{ fontSize: "12px" }}>
+    //           CPMK
+    //         </Text>
     //       </Badge>
     //     </Space>
     //   ),
@@ -433,7 +427,7 @@ const CPLManagement: React.FC = () => {
     />
   );
 
-  // Mobile Matrix Component
+  // Mobile Matrix Component with loading states
   const MobileMatrix = () => (
     <Collapse accordion>
       {cpls.map((cpl) => (
@@ -457,7 +451,10 @@ const CPLManagement: React.FC = () => {
             </Text>
             <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
               {pls.map((pl) => {
-                const key = `${cpl.id}-${pl.id}`;
+                const isChecked = cpl.pl?.some((p) => p.id === pl.id) || false;
+                const loadingKey = `${cpl.id}-${pl.id}-pl`;
+                const isLoading = matrixLoading[loadingKey];
+
                 return (
                   <Col span={12} key={pl.id}>
                     <div
@@ -469,7 +466,8 @@ const CPLManagement: React.FC = () => {
                       }}
                     >
                       <Checkbox
-                        checked={matrixRelationsPL[key] || false}
+                        checked={isChecked}
+                        disabled={isLoading}
                         onChange={(e) =>
                           handleMatrixChange(
                             cpl.id,
@@ -480,7 +478,121 @@ const CPLManagement: React.FC = () => {
                         }
                         style={{ width: "100%" }}
                       >
-                        <Text style={{ fontSize: "12px" }}>{pl.kode}</Text>
+                        <Text style={{ fontSize: "12px" }}>
+                          {isLoading ? (
+                            <span style={{ opacity: 0.6 }}>
+                              {pl.kode}{" "}
+                              <span className="animate-pulse">...</span>
+                            </span>
+                          ) : (
+                            pl.kode
+                          )}
+                        </Text>
+                      </Checkbox>
+                    </div>
+                  </Col>
+                );
+              })}
+            </Row>
+
+            <Text
+              strong
+              style={{ fontSize: "14px", marginBottom: 8, display: "block" }}
+            >
+              Relasi dengan MK:
+            </Text>
+            <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
+              {mks.map((mk) => {
+                const isChecked = cpl.mk?.some((m) => m.id === mk.id) || false;
+                const loadingKey = `${cpl.id}-${mk.id}-mk`;
+                const isLoading = matrixLoading[loadingKey];
+
+                return (
+                  <Col span={12} key={mk.id}>
+                    <div
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #f0f0f0",
+                        borderRadius: "4px",
+                        backgroundColor: "#fafafa",
+                      }}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        disabled={isLoading}
+                        onChange={(e) =>
+                          handleMatrixChange(
+                            cpl.id,
+                            mk.id,
+                            "mk",
+                            e.target.checked
+                          )
+                        }
+                        style={{ width: "100%" }}
+                      >
+                        <Text style={{ fontSize: "12px" }}>
+                          {isLoading ? (
+                            <span style={{ opacity: 0.6 }}>
+                              {mk.kode}{" "}
+                              <span className="animate-pulse">...</span>
+                            </span>
+                          ) : (
+                            mk.kode
+                          )}
+                        </Text>
+                      </Checkbox>
+                    </div>
+                  </Col>
+                );
+              })}
+            </Row>
+
+            <Text
+              strong
+              style={{ fontSize: "14px", marginBottom: 8, display: "block" }}
+            >
+              Relasi dengan CPMK:
+            </Text>
+            <Row gutter={[8, 8]}>
+              {cpmks.map((cpmk) => {
+                const isChecked =
+                  cpl.cpmk?.some((c) => c.id === cpmk.id) || false;
+                const loadingKey = `${cpl.id}-${cpmk.id}-cpmk`;
+                const isLoading = matrixLoading[loadingKey];
+
+                return (
+                  <Col span={12} key={cpmk.id}>
+                    <div
+                      style={{
+                        padding: "8px",
+                        border: "1px solid #f0f0f0",
+                        borderRadius: "4px",
+                        backgroundColor: "#fafafa",
+                      }}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        disabled={isLoading}
+                        onChange={(e) =>
+                          handleMatrixChange(
+                            cpl.id,
+                            cpmk.id,
+                            "cpmk",
+                            e.target.checked
+                          )
+                        }
+                        style={{ width: "100%" }}
+                      >
+                        <Text style={{ fontSize: "12px" }}>
+                          {isLoading ? (
+                            <span style={{ opacity: 0.6 }}>
+                              {cpmk.kode}{" "}
+                              <span className="animate-pulse">...</span>
+                            </span>
+                          ) : (
+                            cpmk.kode
+                          )}
+                        </Text>
                       </Checkbox>
                     </div>
                   </Col>
@@ -493,16 +605,10 @@ const CPLManagement: React.FC = () => {
     </Collapse>
   );
 
-  // Matrix view columns
+  // Matrix view columns with loading states
   const createMatrixColumns = (relationType: "pl" | "mk" | "cpmk") => {
     const items =
       relationType === "pl" ? pls : relationType === "mk" ? mks : cpmks;
-    const relations =
-      relationType === "pl"
-        ? matrixRelationsPL
-        : relationType === "mk"
-        ? matrixRelationsMK
-        : matrixRelationsCPMK;
 
     return [
       {
@@ -519,10 +625,22 @@ const CPLManagement: React.FC = () => {
         width: 80,
         align: "center" as const,
         render: (_: any, record: CPL) => {
-          const key = `${record.id}-${item.id}`;
+          let isChecked = false;
+          if (relationType === "pl") {
+            isChecked = record.pl?.some((p) => p.id === item.id) || false;
+          } else if (relationType === "mk") {
+            isChecked = record.mk?.some((m) => m.id === item.id) || false;
+          } else if (relationType === "cpmk") {
+            isChecked = record.cpmk?.some((c) => c.id === item.id) || false;
+          }
+
+          const loadingKey = `${record.id}-${item.id}-${relationType}`;
+          const isLoading = matrixLoading[loadingKey];
+
           return (
             <Checkbox
-              checked={relations[key] || false}
+              checked={isChecked}
+              disabled={isLoading}
               onChange={(e) =>
                 handleMatrixChange(
                   record.id,
@@ -531,6 +649,7 @@ const CPLManagement: React.FC = () => {
                   e.target.checked
                 )
               }
+              style={isLoading ? { opacity: 0.6 } : {}}
             />
           );
         },
@@ -672,6 +791,28 @@ const CPLManagement: React.FC = () => {
                   pagination={{ pageSize: 20 }}
                 />
               </TabPane>
+              {/* <TabPane tab="Relasi CPL - MK" key="mk">
+                <Table
+                  dataSource={cpls}
+                  columns={createMatrixColumns("mk")}
+                  rowKey="id"
+                  loading={tableLoading}
+                  scroll={{ x: "max-content" }}
+                  size={isTablet ? "small" : "middle"}
+                  pagination={{ pageSize: 20 }}
+                />
+              </TabPane>
+              <TabPane tab="Relasi CPL - CPMK" key="cpmk">
+                <Table
+                  dataSource={cpls}
+                  columns={createMatrixColumns("cpmk")}
+                  rowKey="id"
+                  loading={tableLoading}
+                  scroll={{ x: "max-content" }}
+                  size={isTablet ? "small" : "middle"}
+                  pagination={{ pageSize: 20 }}
+                />
+              </TabPane> */}
             </Tabs>
           )}
         </Card>

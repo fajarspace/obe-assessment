@@ -1,4 +1,4 @@
-// components/EnhancedStudentsGradesTable.tsx - Responsive Version with Yellow Inputs
+// components/EnhancedStudentsGradesTable.tsx - Fixed Class Average Calculations
 import React from "react";
 import {
   Table,
@@ -6,10 +6,8 @@ import {
   Tag,
   Card,
   Collapse,
-  Form,
   Row,
   Col,
-  Divider,
   Typography,
   Grid,
 } from "antd";
@@ -53,7 +51,6 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
   getRelatedCPMK,
   getRelatedSubCPMK,
   updateStudent,
-  calculateAverage,
   isGradeInputMode = true,
   curriculumData,
   hasSubCPMKData,
@@ -63,76 +60,48 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
   const screens = useBreakpoint();
   const isMobile = !screens.md;
 
+  // Helper function to get performance indicator based on score (aligned with PerformanceIndicatorTable)
+  const getPerformanceIndicatorLabel = (
+    score: number
+  ): { label: string; color: string; nilai: number } => {
+    if (score >= 76.25) {
+      return {
+        label: "Sangat Menguasai",
+        color: "text-green-700 bg-green-50",
+        nilai: 4,
+      };
+    } else if (score >= 65) {
+      return {
+        label: "Menguasai",
+        color: "text-blue-700 bg-blue-50",
+        nilai: 3,
+      };
+    } else if (score >= 51.25) {
+      return {
+        label: "Cukup Menguasai",
+        color: "text-yellow-700 bg-yellow-50",
+        nilai: 2,
+      };
+    } else if (score >= 40) {
+      return {
+        label: "Kurang Menguasai",
+        color: "text-orange-700 bg-orange-50",
+        nilai: 1,
+      };
+    } else {
+      return {
+        label: "Tidak Menguasai",
+        color: "text-red-700 bg-red-50",
+        nilai: 0,
+      };
+    }
+  };
+
   const hasAllScores = (student: Student) =>
     assessmentTypes.every((type) => {
       const score = student[type as keyof Student] as number;
       return score !== undefined && score !== null && score > 0;
     });
-
-  // Helper function to check if CPMK/SubCPMK has any non-zero weights
-  const hasNonZeroWeight = (
-    cpl: string,
-    cpmk: string,
-    subCpmk?: string
-  ): boolean => {
-    if (subCpmk) {
-      return assessmentTypes.some((type) => {
-        const weight =
-          assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[type] || 0;
-        return weight > 0;
-      });
-    } else {
-      return assessmentTypes.some((type) => {
-        const weight = assessmentWeights[cpl]?.[cpmk]?.[type] || 0;
-        return weight > 0;
-      });
-    }
-  };
-
-  // Get total weight for a CPMK/SubCPMK across all assessment types
-  const getTotalWeight = (
-    cpl: string,
-    cpmk: string,
-    subCpmk?: string
-  ): number => {
-    if (subCpmk) {
-      return assessmentTypes.reduce((sum, type) => {
-        return (
-          sum +
-          (assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[type] || 0)
-        );
-      }, 0);
-    } else {
-      return assessmentTypes.reduce((sum, type) => {
-        return sum + (assessmentWeights[cpl]?.[cpmk]?.[type] || 0);
-      }, 0);
-    }
-  };
-
-  const calculateCPMKScore = (
-    student: Student,
-    cpl: string,
-    cpmk: string,
-    assessmentType: string,
-    subCpmk?: string
-  ): number => {
-    let weight = 0;
-
-    if (subCpmk) {
-      // Sub-CPMK mode
-      weight =
-        //@ts-ignore
-        assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[assessmentType] ||
-        0;
-    } else {
-      // CPMK mode
-      //@ts-ignore
-      weight = assessmentWeights[cpl]?.[cpmk]?.[assessmentType] || 0;
-    }
-
-    const assessmentScore = Number(student[assessmentType]) || 0;
-    return Math.round(((assessmentScore * weight) / 100) * 10) / 10;
-  };
 
   const getAssessmentColor = (type: string): string => {
     const colors: Record<string, string> = {
@@ -142,11 +111,42 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
       uas: "bg-yellow-100",
       projek: "bg-sky-100",
       praktikum: "bg-green-100",
-      presentasi: "bg-pink-100",
+      presentasi: "bg-gray-100",
       quiz: "bg-orange-100",
       ujian: "bg-slate-100",
     };
     return colors[type.toLowerCase()] || "bg-yellow-100";
+  };
+
+  // Calculate field average with proper filtering
+  const calculateFieldAverage = (field: string): number => {
+    if (field === "nilaiAkhir") {
+      // For final grades, only include students with complete assessment scores
+      const studentsWithCompleteScores = students.filter(hasAllScores);
+      if (studentsWithCompleteScores.length === 0) return 0;
+
+      const total = studentsWithCompleteScores.reduce(
+        (sum, student) => sum + (Number(student[field]) || 0),
+        0
+      );
+      return Math.round((total / studentsWithCompleteScores.length) * 10) / 10;
+    } else if (assessmentTypes.includes(field)) {
+      // For assessment types, include all students who have a score > 0 for that field
+      const studentsWithScore = students.filter((student) => {
+        const score = Number(student[field]) || 0;
+        return score > 0;
+      });
+
+      if (studentsWithScore.length === 0) return 0;
+
+      const total = studentsWithScore.reduce(
+        (sum, student) => sum + (Number(student[field]) || 0),
+        0
+      );
+      return Math.round((total / studentsWithScore.length) * 10) / 10;
+    }
+
+    return 0;
   };
 
   // Mobile Student Card Component
@@ -163,17 +163,17 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
       <Card
         key={student.key}
         size="small"
-        className={`mb-4 ${isAverageRow ? "bg-pink-50 border-pink-200" : ""}`}
+        className={`mb-4 ${isAverageRow ? "bg-gray-50 border-gray-200" : ""}`}
         title={
           <div className="flex justify-between items-center">
             <div>
-              <Text strong className={isAverageRow ? "text-pink-700" : ""}>
+              <Text strong className={isAverageRow ? "text-gray-700" : ""}>
                 {isAverageRow
                   ? "Rata-rata Kelas"
                   : `${index + 1}. ${student.name || "Nama Mahasiswa"}`}
               </Text>
               {!isAverageRow && (
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-sm text-gray-500 mt-1">
                   NIM: {student.nim || "Belum diisi"}
                 </div>
               )}
@@ -206,7 +206,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
               <Row gutter={[8, 8]}>
                 <Col span={12}>
                   <div className="space-y-1">
-                    <Text className="text-xs text-gray-600">NIM:</Text>
+                    <Text className="text-sm text-gray-600">NIM:</Text>
                     <Input
                       value={student.nim}
                       onChange={(e) =>
@@ -220,7 +220,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                 </Col>
                 <Col span={12}>
                   <div className="space-y-1">
-                    <Text className="text-xs text-gray-600">Nama:</Text>
+                    <Text className="text-sm text-gray-600">Nama:</Text>
                     <Input
                       value={student.name}
                       onChange={(e) =>
@@ -257,6 +257,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                           relatedSubCPMK.reduce((subTotal, subCpmk) => {
                             return (
                               subTotal +
+                              //@ts-ignore
                               (assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[
                                 subCpmk
                               ]?.[assessmentType] || 0)
@@ -266,6 +267,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                       } else {
                         return (
                           cpmkTotal +
+                          //@ts-ignore
                           (assessmentWeights[cpl]?.[cpmk]?.[assessmentType] ||
                             0)
                         );
@@ -281,9 +283,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                         {assessmentType.charAt(0).toUpperCase() +
                           assessmentType.slice(1)}
                       </Text>
-                      <Tag color="blue" size="small">
-                        {assessmentPercentage}%
-                      </Tag>
+                      <Tag color="gray">{assessmentPercentage}%</Tag>
                     </div>
                     <Input
                       type="number"
@@ -311,7 +311,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                           ? "#fde047"
                           : "#f3f4f6",
                       }}
-                      placeholder={isAverageRow ? "Rata-rata" : "0-100"}
+                      placeholder={isAverageRow ? "Rata-rata" : "0"}
                     />
                   </div>
                 );
@@ -353,6 +353,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                       curriculumData?.subcpmk?.[subCpmk]
                                         ?.kode || subCpmk;
                                     const weight =
+                                      //@ts-ignore
                                       assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[
                                         subCpmk
                                       ]?.[assessmentType] || 0;
@@ -365,24 +366,26 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                       ] as number) || 0;
                                     const actualScore =
                                       (currentPercentageValue * weight) / 100;
+                                    const performanceIndicator =
+                                      getPerformanceIndicatorLabel(
+                                        currentPercentageValue
+                                      );
 
                                     return (
                                       <div
                                         key={subCpmk}
-                                        className="p-2 bg-white rounded border"
+                                        className="p-3 bg-white rounded border"
                                       >
                                         <div className="flex justify-between items-center mb-2">
-                                          <Text className="text-sm">
+                                          <Text className="text-sm font-medium">
                                             {subCpmkCode}
                                           </Text>
-                                          <Tag color="blue" size="small">
-                                            {weight}%
-                                          </Tag>
+                                          <Tag color="gray">{weight}%</Tag>
                                         </div>
                                         <Row gutter={8}>
                                           <Col span={12}>
                                             <div className="space-y-1">
-                                              <Text className="text-xs text-gray-600">
+                                              <Text className="text-sm text-gray-600">
                                                 Input (0-100):
                                               </Text>
                                               <Input
@@ -431,13 +434,13 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                                 style={{
                                                   backgroundColor: "#fde047",
                                                 }}
-                                                placeholder="0-100"
+                                                placeholder="0"
                                               />
                                             </div>
                                           </Col>
                                           <Col span={12}>
                                             <div className="space-y-1">
-                                              <Text className="text-xs text-gray-600">
+                                              <Text className="text-sm text-gray-600">
                                                 Hasil:
                                               </Text>
                                               <div className="text-sm p-2 bg-gray-100 rounded text-center">
@@ -446,6 +449,29 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                             </div>
                                           </Col>
                                         </Row>
+                                        {/* Performance Indicator Label */}
+                                        {currentPercentageValue > 0 && (
+                                          <div className="mt-3">
+                                            <div className="text-sm text-gray-600 mb-1">
+                                              <strong>
+                                                Indikator Penguasaan Materi:
+                                              </strong>
+                                            </div>
+                                            <div
+                                              className={`text-sm p-2 rounded border ${performanceIndicator.color}`}
+                                            >
+                                              <div className="flex justify-between items-center">
+                                                <span>
+                                                  {performanceIndicator.label}
+                                                </span>
+                                                <Tag color="gray">
+                                                  Nilai:{" "}
+                                                  {performanceIndicator.nilai}
+                                                </Tag>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })
@@ -453,6 +479,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                               } else {
                                 // Direct CPMK Mode
                                 const weight =
+                                  //@ts-ignore
                                   assessmentWeights[cpl]?.[cpmk]?.[
                                     assessmentType
                                   ] || 0;
@@ -464,24 +491,26 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                   ] as number) || 0;
                                 const actualScore =
                                   (currentPercentageValue * weight) / 100;
+                                const performanceIndicator =
+                                  getPerformanceIndicatorLabel(
+                                    currentPercentageValue
+                                  );
 
                                 return (
                                   <div
                                     key={cpmk}
-                                    className="p-2 bg-white rounded border"
+                                    className="p-3 bg-white rounded border"
                                   >
                                     <div className="flex justify-between items-center mb-2">
-                                      <Text className="text-sm">
+                                      <Text className="text-sm font-medium">
                                         {cpmkCode}
                                       </Text>
-                                      <Tag color="blue" size="small">
-                                        {weight}%
-                                      </Tag>
+                                      <Tag color="gray">{weight}%</Tag>
                                     </div>
                                     <Row gutter={8}>
                                       <Col span={12}>
                                         <div className="space-y-1">
-                                          <Text className="text-xs text-gray-600">
+                                          <Text className="text-sm text-gray-600">
                                             Input (0-100):
                                           </Text>
                                           <Input
@@ -527,13 +556,13 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                             style={{
                                               backgroundColor: "#fde047",
                                             }}
-                                            placeholder="0-100"
+                                            placeholder="0"
                                           />
                                         </div>
                                       </Col>
                                       <Col span={12}>
                                         <div className="space-y-1">
-                                          <Text className="text-xs text-gray-600">
+                                          <Text className="text-sm text-gray-600">
                                             Hasil:
                                           </Text>
                                           <div className="text-sm p-2 bg-gray-100 rounded text-center">
@@ -542,6 +571,29 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                         </div>
                                       </Col>
                                     </Row>
+                                    {/* Performance Indicator Label */}
+                                    {currentPercentageValue > 0 && (
+                                      <div className="mt-3">
+                                        <div className="text-sm text-gray-600 mb-1">
+                                          <strong>
+                                            Indikator Penguasaan Materi:
+                                          </strong>
+                                        </div>
+                                        <div
+                                          className={`text-sm p-2 rounded border ${performanceIndicator.color}`}
+                                        >
+                                          <div className="flex justify-between items-center">
+                                            <span>
+                                              {performanceIndicator.label}
+                                            </span>
+                                            <Tag color="default">
+                                              Nilai:{" "}
+                                              {performanceIndicator.nilai}
+                                            </Tag>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               }
@@ -580,6 +632,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                             relatedSubCPMK.forEach((subCpmk) => {
                               assessmentTypes.forEach((type) => {
                                 totalCpmkWeight +=
+                                  //@ts-ignore
                                   assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[
                                     subCpmk
                                   ]?.[type] || 0;
@@ -588,6 +641,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                           } else {
                             assessmentTypes.forEach((type) => {
                               totalCpmkWeight +=
+                                //@ts-ignore
                                 assessmentWeights[cpl]?.[cpmk]?.[type] || 0;
                             });
                           }
@@ -601,6 +655,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                               relatedSubCPMK.forEach((subCpmk) => {
                                 assessmentTypes.forEach((assessmentType) => {
                                   const weight =
+                                    //@ts-ignore
                                     assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[
                                       subCpmk
                                     ]?.[assessmentType] || 0;
@@ -616,6 +671,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                             } else {
                               assessmentTypes.forEach((assessmentType) => {
                                 const weight =
+                                  //@ts-ignore
                                   assessmentWeights[cpl]?.[cpmk]?.[
                                     assessmentType
                                   ] || 0;
@@ -641,7 +697,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                               >
                                 <div>
                                   <Text className="text-sm">{cpmkCode}</Text>
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-sm text-gray-500">
                                     {totalCpmkWeight}%
                                   </div>
                                 </div>
@@ -649,7 +705,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                                   <div className="font-medium text-sm">
                                     {Math.round(finalScore * 10) / 10}
                                   </div>
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-sm text-gray-500">
                                     poin
                                   </div>
                                 </div>
@@ -722,7 +778,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
         dataIndex: "no",
         key: "no",
         width: isMobile ? 30 : 40,
-        className: "text-center text-xs",
+        className: "text-center text-sm",
         render: (value: number) => value || "",
       },
       {
@@ -730,11 +786,11 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
         dataIndex: "nim",
         key: "nim",
         width: isMobile ? 70 : 90,
-        className: "text-xs",
+        className: "text-sm",
         render: (value: string, record: Student) => {
           if (record.key === "average") {
             return (
-              <div className="text-center font-semibold text-xs">{value}</div>
+              <div className="text-center font-semibold text-sm">{value}</div>
             );
           }
           return (
@@ -742,7 +798,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
               value={value}
               onChange={(e) => updateStudent(record.key, "nim", e.target.value)}
               size="small"
-              className="text-xs h-6 bg-yellow-300"
+              className="text-sm h-6 bg-yellow-300"
               style={{ backgroundColor: "#fde047" }}
             />
           );
@@ -753,11 +809,11 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
         dataIndex: "name",
         key: "name",
         width: isMobile ? 120 : 150,
-        className: "text-xs",
+        className: "text-sm",
         render: (value: string, record: Student) => {
           if (record.key === "average") {
             return (
-              <div className="text-center font-semibold text-xs">{value}</div>
+              <div className="text-center font-semibold text-sm">{value}</div>
             );
           }
           return (
@@ -767,7 +823,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                 updateStudent(record.key, "name", e.target.value)
               }
               size="small"
-              className="text-xs h-6 bg-yellow-300"
+              className="text-sm h-6 bg-yellow-300"
               style={{ backgroundColor: "#fde047" }}
             />
           );
@@ -820,17 +876,17 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
     columns.push({
       title: (
         <div className="text-center">
-          <div className={`font-semibold ${isMobile ? "text-xs" : "text-xs"}`}>
+          <div className={`font-semibold ${isMobile ? "text-sm" : "text-sm"}`}>
             INPUT NILAI
           </div>
           <div
-            className={`font-normal mt-1 ${isMobile ? "text-xs" : "text-xs"}`}
+            className={`font-normal mt-1 ${isMobile ? "text-sm" : "text-sm"}`}
           >
             ({totalInputPercentage}%)
           </div>
         </div>
       ),
-      className: "text-xs font-semibold",
+      className: "text-sm font-semibold",
       children: inputColumns.map((col) => {
         // Calculate percentage for this specific assessment type
         const assessmentPercentage = relatedCPL.reduce((total, cpl) => {
@@ -865,10 +921,10 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
         return {
           title: (
             <div className="text-center">
-              <div className={isMobile ? "text-xs" : ""}>{col.title}</div>
+              <div className={isMobile ? "text-sm" : ""}>{col.title}</div>
               <div
                 className={`font-normal mt-1 ${
-                  isMobile ? "text-xs" : "text-xs"
+                  isMobile ? "text-sm" : "text-sm"
                 }`}
               >
                 ({assessmentPercentage}%)
@@ -878,41 +934,43 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
           dataIndex: col.key,
           key: col.key,
           width: isMobile ? 50 : 60,
-          className: "text-center text-xs",
+          className: "text-center text-sm",
           onHeaderCell: () => ({
             style: { textAlign: "center" },
           }),
           render: (value: number, record: Student) => {
             if (record.key === "average") {
               return (
-                <div className="text-center font-semibold text-xs py-1 bg-pink-100 rounded">
-                  {value}
+                <div className="text-center font-semibold text-sm py-1 bg-gray-100 rounded">
+                  {calculateFieldAverage(col.key)}
                 </div>
               );
             }
 
             if (isGradeInputMode) {
               return (
+                //input nilai
                 <Input
                   type="number"
                   value={value}
-                  onChange={(e) =>
-                    updateStudent(
-                      record.key,
-                      col.key as keyof Student,
-                      Number(e.target.value) || 0
-                    )
-                  }
+                  onChange={(e) => {
+                    let val = Number(e.target.value);
+
+                    if (val > 100) val = 100; // batas max
+                    if (val < 0) val = 0; // batas min
+
+                    updateStudent(record.key, col.key as keyof Student, val);
+                  }}
                   min={0}
                   max={100}
                   size="small"
-                  className="text-center text-xs h-6 bg-yellow-300 border-yellow-400"
+                  className="text-center text-sm h-6 bg-yellow-300 border-yellow-400"
                   style={{ backgroundColor: "#fde047" }}
                 />
               );
             } else {
               return (
-                <div className="text-center text-xs py-1 bg-gray-100 border rounded">
+                <div className="text-center text-sm py-1 bg-gray-100 border rounded">
                   {value}
                 </div>
               );
@@ -922,7 +980,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
       }),
     } as any);
 
-    // CPMK Final Scores Section - Show final CPMK scores grouped by CPL
+    // CPMK Final Scores Section - Show final CPMK scores grouped by CPL with Performance Indicators
     if (relatedCPL.length > 0 && isGradeInputMode) {
       const cplGroups: any[] = [];
 
@@ -941,12 +999,14 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
             relatedSubCPMK.forEach((subCpmk) => {
               assessmentTypes.forEach((type) => {
                 totalCpmkWeight +=
+                  //@ts-ignore
                   assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[type] ||
                   0;
               });
             });
           } else {
             assessmentTypes.forEach((type) => {
+              //@ts-ignore
               totalCpmkWeight += assessmentWeights[cpl]?.[cpmk]?.[type] || 0;
             });
           }
@@ -958,104 +1018,160 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                 <div className="text-center">
                   <div
                     className={`font-semibold mb-1 ${
-                      isMobile ? "text-xs" : "text-sm"
+                      isMobile ? "text-sm" : "text-sm"
                     }`}
                   >
                     {cpmkCode}
                   </div>
-                  <div className={`${isMobile ? "text-xs" : "text-xs"} px-1`}>
+                  <div className={`${isMobile ? "text-sm" : "text-sm"} px-1`}>
                     {totalCpmkWeight}%
                   </div>
                 </div>
               ),
               dataIndex: `final_cpmk_${cpl}_${cpmk}`,
               key: `final_cpmk_${cpl}_${cpmk}`,
-              width: isMobile ? 70 : 100,
-              className: "text-center text-xs",
+              width: isMobile ? 120 : 150, // Increased width to accommodate performance indicators
+              className: "text-center text-sm",
               onHeaderCell: () => ({
                 style: { textAlign: "center" },
               }),
               render: (_: any, record: Student) => {
                 if (record.key === "average") {
-                  // Calculate average CPMK score for the class
-                  let totalWeightedScore = 0;
-                  let totalWeight = 0;
-
-                  if (hasSubCPMKData && relatedSubCPMK.length > 0) {
-                    relatedSubCPMK.forEach((subCpmk) => {
-                      assessmentTypes.forEach((assessmentType) => {
-                        const weight =
-                          assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[
-                            assessmentType
-                          ] || 0;
-                        if (weight > 0) {
-                          const assessmentScore =
-                            Number(record[assessmentType]) || 0;
-                          totalWeightedScore +=
-                            (assessmentScore * weight) / 100;
-                          totalWeight += weight / 100;
-                        }
-                      });
-                    });
-                  } else {
-                    assessmentTypes.forEach((assessmentType) => {
-                      const weight =
-                        assessmentWeights[cpl]?.[cpmk]?.[assessmentType] || 0;
-                      if (weight > 0) {
-                        const assessmentScore =
-                          Number(record[assessmentType]) || 0;
-                        totalWeightedScore += (assessmentScore * weight) / 100;
-                        totalWeight += weight / 100;
-                      }
-                    });
+                  // Calculate average CPMK score for the class - only include students with complete assessment scores
+                  const studentsWithCompleteScores =
+                    students.filter(hasAllScores);
+                  if (studentsWithCompleteScores.length === 0) {
+                    return (
+                      <div className="text-center font-semibold text-sm py-2 bg-gray-100 rounded">
+                        0
+                      </div>
+                    );
                   }
 
-                  const finalScore =
-                    totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+                  // Calculate average on 0-100 scale (percentage-based)
+                  let totalPercentageScore = 0;
+                  let totalWeight = 0;
+
+                  studentsWithCompleteScores.forEach((student) => {
+                    if (hasSubCPMKData && relatedSubCPMK.length > 0) {
+                      relatedSubCPMK.forEach((subCpmk) => {
+                        assessmentTypes.forEach((assessmentType) => {
+                          const weight =
+                            //@ts-ignore
+                            assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[
+                              subCpmk
+                            ]?.[assessmentType] || 0;
+                          if (weight > 0) {
+                            const assessmentScore =
+                              Number(student[assessmentType]) || 0;
+                            // Add to percentage calculation (assessment score is already 0-100)
+                            totalPercentageScore += assessmentScore * weight;
+                            totalWeight += weight;
+                          }
+                        });
+                      });
+                    } else {
+                      assessmentTypes.forEach((assessmentType) => {
+                        const weight =
+                          //@ts-ignore
+                          assessmentWeights[cpl]?.[cpmk]?.[assessmentType] || 0;
+                        if (weight > 0) {
+                          const assessmentScore =
+                            Number(student[assessmentType]) || 0;
+                          // Add to percentage calculation (assessment score is already 0-100)
+                          totalPercentageScore += assessmentScore * weight;
+                          totalWeight += weight;
+                        }
+                      });
+                    }
+                  });
+
+                  // Calculate average percentage (0-100 scale)
+                  const averagePercentage =
+                    totalWeight > 0 ? totalPercentageScore / totalWeight : 0;
+
+                  // Get performance indicator for average
+                  const performanceIndicator =
+                    getPerformanceIndicatorLabel(averagePercentage);
+
                   return (
-                    <div className="text-center font-semibold text-sm py-2 bg-pink-100 rounded">
-                      {Math.round(finalScore * 10) / 10}
+                    <div className="text-center">
+                      <div className="font-semibold text-sm py-2 bg-gray-100 rounded mb-2">
+                        {Math.round(averagePercentage * 10) / 10}
+                      </div>
+                      {/* Performance Indicator for Average */}
+                      {averagePercentage > 0 && (
+                        <div className="text-sm">
+                          <div
+                            className={`px-1 py-1 rounded text-sm ${performanceIndicator.color}`}
+                          >
+                            {performanceIndicator.label}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 }
 
-                // Calculate final CPMK score for individual student
-                let totalWeightedScore = 0;
+                // Calculate final CPMK score on 0-100 percentage scale
+                let totalPercentageScore = 0;
                 let totalWeight = 0;
 
                 if (hasSubCPMKData && relatedSubCPMK.length > 0) {
                   relatedSubCPMK.forEach((subCpmk) => {
                     assessmentTypes.forEach((assessmentType) => {
                       const weight =
+                        //@ts-ignore
                         assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[
                           assessmentType
                         ] || 0;
                       if (weight > 0) {
                         const assessmentScore =
                           Number(record[assessmentType]) || 0;
-                        totalWeightedScore += (assessmentScore * weight) / 100;
-                        totalWeight += weight / 100;
+                        // Calculate percentage: assessment score (0-100) * weight
+                        totalPercentageScore += assessmentScore * weight;
+                        totalWeight += weight;
                       }
                     });
                   });
                 } else {
                   assessmentTypes.forEach((assessmentType) => {
                     const weight =
+                      //@ts-ignore
                       assessmentWeights[cpl]?.[cpmk]?.[assessmentType] || 0;
                     if (weight > 0) {
                       const assessmentScore =
                         Number(record[assessmentType]) || 0;
-                      totalWeightedScore += (assessmentScore * weight) / 100;
-                      totalWeight += weight / 100;
+                      // Calculate percentage: assessment score (0-100) * weight
+                      totalPercentageScore += assessmentScore * weight;
+                      totalWeight += weight;
                     }
                   });
                 }
 
-                const finalScore =
-                  totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+                // Final percentage score (0-100 scale)
+                const finalPercentageScore =
+                  totalWeight > 0 ? totalPercentageScore / totalWeight : 0;
+
+                // Get performance indicator
+                const performanceIndicator =
+                  getPerformanceIndicatorLabel(finalPercentageScore);
+
                 return (
-                  <div className="text-center text-sm py-2 bg-gray-100 border rounded">
-                    {Math.round(finalScore * 10) / 10}
+                  <div className="text-center space-y-2">
+                    <div className="text-sm py-2 bg-gray-100 border rounded font-medium">
+                      {Math.round(finalPercentageScore * 10) / 10}
+                    </div>
+                    {/* Performance Indicator Display */}
+                    {finalPercentageScore > 0 && (
+                      <div className="text-sm">
+                        <div
+                          className={`px-2 py-1 rounded text-sm border ${performanceIndicator.color}`}
+                        >
+                          {performanceIndicator.label}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               },
@@ -1069,7 +1185,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
             title: (
               <div
                 className={`text-center font-semibold rounded ${
-                  isMobile ? "text-xs" : ""
+                  isMobile ? "text-sm" : ""
                 }`}
               >
                 {cplCode}
@@ -1118,6 +1234,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
               // Filter Sub-CPMK with non-zero weights for THIS SPECIFIC assessment type
               const filteredSubCPMK = relatedSubCPMK.filter((subCpmk) => {
                 const weight =
+                  //@ts-ignore
                   assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[
                     assessmentType
                   ] || 0;
@@ -1129,6 +1246,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                   const subCpmkCode =
                     curriculumData?.subcpmk?.[subCpmk]?.kode || subCpmk;
                   const weight =
+                    //@ts-ignore
                     assessmentWeights[cpl]?.[cpmk]?.subcpmk?.[subCpmk]?.[
                       assessmentType
                     ] || 0;
@@ -1138,14 +1256,14 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                       <div className="text-center">
                         <div
                           className={`font-semibold mb-1 ${
-                            isMobile ? "text-xs" : "text-xs"
+                            isMobile ? "text-sm" : "text-sm"
                           }`}
                         >
                           {subCpmkCode}
                         </div>
                         <div
-                          className={`px-1 rounded font-medium bg-blue-100 ${
-                            isMobile ? "text-xs" : "text-xs"
+                          className={`px-1 rounded font-medium bg-gray-100 ${
+                            isMobile ? "text-sm" : "text-sm"
                           }`}
                         >
                           {weight}%
@@ -1154,23 +1272,49 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                     ),
                     dataIndex: `${cpl}_${cpmk}_${subCpmk}_${assessmentType}`,
                     key: `${cpl}_${cpmk}_${subCpmk}_${assessmentType}`,
-                    width: isMobile ? 60 : 80,
-                    className: "text-center text-xs",
+                    width: isMobile ? 80 : 120,
+                    className: "text-center text-sm",
                     onHeaderCell: () => ({
                       style: { textAlign: "center" },
                     }),
                     render: (_: any, record: Student) => {
                       if (record.key === "average") {
-                        const cpmkScore = calculateCPMKScore(
-                          record,
-                          cpl,
-                          cpmk,
-                          assessmentType,
-                          subCpmk
-                        );
+                        // Calculate average for CPMK input mode - use students with complete scores
+                        const studentsWithScores =
+                          students.filter(hasAllScores);
+                        if (studentsWithScores.length === 0) {
+                          return (
+                            <div className="text-center font-semibold text-sm py-1 bg-gray-100">
+                              0
+                            </div>
+                          );
+                        }
+
+                        // Calculate average percentage input for CPMK input mode
+                        const validStudents = students.filter(hasAllScores);
+                        if (validStudents.length === 0) {
+                          return (
+                            <div className="text-center font-semibold text-sm py-1 bg-gray-100">
+                              0
+                            </div>
+                          );
+                        }
+
+                        let totalPercentageInputs = 0;
+                        validStudents.forEach((student) => {
+                          // Get the percentage input value (0-100 scale)
+                          const percentageInput =
+                            (student[
+                              `${cpl}_${cpmk}_${subCpmk}_${assessmentType}_percentage`
+                            ] as number) || 0;
+                          totalPercentageInputs += percentageInput;
+                        });
+
+                        const averagePercentageInput =
+                          totalPercentageInputs / validStudents.length;
                         return (
-                          <div className="text-center font-semibold text-xs py-1 bg-pink-100">
-                            {cpmkScore}
+                          <div className="text-center font-semibold text-sm py-1 bg-gray-100">
+                            {Math.round(averagePercentageInput * 10) / 10}
                           </div>
                         );
                       }
@@ -1182,6 +1326,9 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                         ] as number) || 0;
                       const actualScore =
                         (currentPercentageValue * weight) / 100;
+                      const performanceIndicator = getPerformanceIndicatorLabel(
+                        currentPercentageValue
+                      );
 
                       return (
                         <div className="space-y-1">
@@ -1224,13 +1371,23 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                             min={0}
                             max={100}
                             size="small"
-                            className="text-center text-xs h-5 bg-yellow-300 border-yellow-400"
+                            className="text-center text-sm h-5 bg-yellow-300 border-yellow-400"
                             style={{ backgroundColor: "#fde047" }}
-                            placeholder="0-100"
+                            placeholder="0"
                           />
-                          <div className="text-xs text-gray-500 text-center">
-                            = {actualScore.toFixed(1)}
+                          <div className="text-sm text-gray-500 text-center">
+                            {actualScore.toFixed(1)}
                           </div>
+                          {/* Performance Indicator for Desktop Table */}
+                          {currentPercentageValue > 0 && (
+                            <div className="text-sm text-center">
+                              <div
+                                className={`px-1 py-1 rounded text-sm ${performanceIndicator.color}`}
+                              >
+                                {performanceIndicator.label}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     },
@@ -1243,17 +1400,10 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                     <div className="text-center">
                       <div
                         className={`font-semibold mb-1 ${
-                          isMobile ? "text-xs" : "text-xs"
+                          isMobile ? "text-sm" : "text-sm"
                         }`}
                       >
                         {cpmkCode}
-                      </div>
-                      <div
-                        className={`text-gray-600 ${
-                          isMobile ? "text-xs" : "text-xs"
-                        }`}
-                      >
-                        {filteredSubCPMK.length} Sub-CPMK
                       </div>
                     </div>
                   ),
@@ -1264,6 +1414,7 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
             } else {
               // Direct CPMK column (no Sub-CPMK) - only if has non-zero weight for THIS assessment type
               const weight =
+                //@ts-ignore
                 assessmentWeights[cpl]?.[cpmk]?.[assessmentType] || 0;
               if (weight > 0) {
                 cpmkColumns.push({
@@ -1271,14 +1422,14 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                     <div className="text-center">
                       <div
                         className={`font-semibold mb-1 ${
-                          isMobile ? "text-xs" : "text-xs"
+                          isMobile ? "text-sm" : "text-sm"
                         }`}
                       >
                         {cpmkCode}
                       </div>
                       <div
-                        className={`px-1 rounded font-medium bg-blue-100 ${
-                          isMobile ? "text-xs" : "text-xs"
+                        className={`px-1 rounded font-medium bg-gray-100 ${
+                          isMobile ? "text-sm" : "text-sm"
                         }`}
                       >
                         {weight}%
@@ -1287,22 +1438,48 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                   ),
                   dataIndex: `${cpl}_${cpmk}_${assessmentType}`,
                   key: `${cpl}_${cpmk}_${assessmentType}`,
-                  width: isMobile ? 70 : 90,
-                  className: "text-center text-xs",
+                  width: isMobile ? 90 : 120,
+                  className: "text-center text-sm",
                   onHeaderCell: () => ({
                     style: { textAlign: "center" },
                   }),
                   render: (_: any, record: Student) => {
                     if (record.key === "average") {
-                      const cpmkScore = calculateCPMKScore(
-                        record,
-                        cpl,
-                        cpmk,
-                        assessmentType
-                      );
+                      // Calculate average for direct CPMK mode - use students with complete scores
+                      const studentsWithScores = students.filter(hasAllScores);
+                      if (studentsWithScores.length === 0) {
+                        return (
+                          <div className="text-center font-semibold text-sm py-1 bg-gray-100">
+                            0
+                          </div>
+                        );
+                      }
+
+                      // Calculate average percentage input for direct CPMK mode
+                      const activeStudents = students.filter(hasAllScores);
+                      if (activeStudents.length === 0) {
+                        return (
+                          <div className="text-center font-semibold text-sm py-1 bg-gray-100">
+                            0
+                          </div>
+                        );
+                      }
+
+                      let totalPercentageInputs = 0;
+                      activeStudents.forEach((student) => {
+                        // Get the percentage input value (0-100 scale)
+                        const percentageInput =
+                          (student[
+                            `${cpl}_${cpmk}_${assessmentType}_percentage`
+                          ] as number) || 0;
+                        totalPercentageInputs += percentageInput;
+                      });
+
+                      const averagePercentageInput =
+                        totalPercentageInputs / activeStudents.length;
                       return (
-                        <div className="text-center font-semibold text-xs py-1 bg-pink-100">
-                          {cpmkScore}
+                        <div className="text-center font-semibold text-sm py-1 bg-gray-100">
+                          {Math.round(averagePercentageInput * 10) / 10}
                         </div>
                       );
                     }
@@ -1313,6 +1490,9 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                         `${cpl}_${cpmk}_${assessmentType}_percentage`
                       ] as number) || 0;
                     const actualScore = (currentPercentageValue * weight) / 100;
+                    const performanceIndicator = getPerformanceIndicatorLabel(
+                      currentPercentageValue
+                    );
 
                     return (
                       <div className="space-y-1">
@@ -1355,13 +1535,28 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                           min={0}
                           max={100}
                           size="small"
-                          className="text-center text-xs h-5 bg-yellow-300 border-yellow-400"
+                          className="text-center text-sm h-5 bg-yellow-300 border-yellow-400"
                           style={{ backgroundColor: "#fde047" }}
-                          placeholder="0-100"
+                          placeholder="0"
                         />
-                        <div className="text-xs text-gray-500 text-center">
-                          = {actualScore.toFixed(1)}
+                        <div className="text-sm text-gray-500 text-center">
+                          {actualScore.toFixed(1)}
+                          {/* pts ({currentPercentageValue}
+                          %) */}
                         </div>
+                        {/* Performance Indicator for Desktop Table */}
+                        {currentPercentageValue > 0 && (
+                          <div className="text-sm text-center">
+                            <div className="text-gray-600 mb-1">
+                              <strong>Indikator:</strong>
+                            </div>
+                            <div
+                              className={`px-1 py-1 rounded text-sm ${performanceIndicator.color}`}
+                            >
+                              {performanceIndicator.label}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   },
@@ -1375,8 +1570,8 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
             cplGroups.push({
               title: (
                 <div
-                  className={`text-center font-semibold p-1 rounded border ${
-                    isMobile ? "text-xs" : "text-sm"
+                  className={`text-center font-semibold p-1 rounded ${
+                    isMobile ? "text-sm" : "text-sm"
                   }`}
                 >
                   {cplCode}
@@ -1423,14 +1618,14 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
           columns.push({
             title: (
               <div
-                className={`text-center font-bold bg-yellow-300 ${
+                className={`text-center font-bold ${
                   isMobile ? "text-sm" : "text-sm"
                 }`}
               >
                 <div>{assessmentType.toUpperCase()}</div>
                 <div
                   className={`font-normal mt-1 ${
-                    isMobile ? "text-xs" : "text-xs"
+                    isMobile ? "text-sm" : "text-sm"
                   }`}
                 >
                   ({totalAssessmentWeight}%)
@@ -1447,22 +1642,22 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
     // Final result columns
     columns.push({
       title: "HASIL AKHIR",
-      className: "text-xs font-semibold",
+      className: "text-sm font-semibold",
       children: [
         {
           title: "Nilai",
           dataIndex: "nilaiAkhir",
           key: "nilaiAkhir",
           width: isMobile ? 50 : 70,
-          className: "text-center text-xs",
+          className: "text-center text-sm",
           onHeaderCell: () => ({
             style: { textAlign: "center" },
           }),
           render: (value: number, record: Student) => {
             if (record.key === "average") {
               return (
-                <div className="text-center font-semibold text-xs py-1 bg-pink-100 rounded">
-                  {value || 0}
+                <div className="text-center font-semibold text-sm py-1 bg-gray-100 rounded">
+                  {calculateFieldAverage("nilaiAkhir")}
                 </div>
               );
             }
@@ -1470,7 +1665,36 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
             if (hasAllScores(record)) {
               return (
                 <div className="text-center space-y-1">
-                  <div className="font-semibold text-xs">{value}</div>
+                  <div className="font-semibold text-sm">{value}</div>
+                </div>
+              );
+            } else {
+              return <div className="text-center text-gray-400 text-sm">-</div>;
+            }
+          },
+        },
+        {
+          title: "Label",
+          dataIndex: "nilaiAkhir",
+          key: "nilaiAkhir",
+          width: isMobile ? 50 : 70,
+          className: "text-center text-sm",
+          onHeaderCell: () => ({
+            style: { textAlign: "center" },
+          }),
+          //@ts-ignore
+          render: (value: number, record: Student) => {
+            if (record.key === "average") {
+              return (
+                <div className="text-center font-semibold text-sm py-1 bg-gray-100 rounded">
+                  {calculateFieldAverage("nilaiAkhir")}
+                </div>
+              );
+            }
+
+            if (hasAllScores(record)) {
+              return (
+                <div className="text-center space-y-1">
                   <Tag
                     color={
                       ["D", "D+", "E"].includes(record.nilaiMutu || "")
@@ -1481,14 +1705,14 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
                         ? "orange"
                         : "green"
                     }
-                    className="text-xs"
+                    className="text-sm"
                   >
                     {record.nilaiMutu}
                   </Tag>
                 </div>
               );
             } else {
-              return <div className="text-center text-gray-400 text-xs">-</div>;
+              return <div className="text-center text-gray-400 text-sm">-</div>;
             }
           },
         },
@@ -1496,66 +1720,85 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
           title: "Indikator",
           dataIndex: "indikator",
           key: "indikator",
-          width: isMobile ? 70 : 100,
-          className: "text-center text-xs",
+          width: isMobile ? 100 : 130, // Increased width to accommodate colored indicators
+          className: "text-center text-sm",
           onHeaderCell: () => ({
             style: { textAlign: "center" },
           }),
           //@ts-ignore
           render: (value: any, record: Student) => {
             if (record.key === "average") {
-              const indicator = getPerformanceIndicator(record.nilaiAkhir || 0);
-              return (
-                <div className="text-center space-y-1">
-                  <div className="text-xs">{indicator.description}</div>
-                </div>
-              );
+              const averageNilai = calculateFieldAverage("nilaiAkhir");
+              if (averageNilai > 0) {
+                const indicator = getPerformanceIndicator(averageNilai);
+                const performanceIndicatorLabel =
+                  getPerformanceIndicatorLabel(averageNilai);
+
+                return (
+                  <div className="text-center space-y-1">
+                    <div
+                      className={`text-sm px-2 py-1 rounded border ${performanceIndicatorLabel.color}`}
+                    >
+                      {indicator.description}
+                    </div>
+                  </div>
+                );
+              }
+              return <div className="text-center text-sm text-gray-500">-</div>;
             }
 
             if (hasAllScores(record) && record.nilaiAkhir !== undefined) {
               const indicator = getPerformanceIndicator(record.nilaiAkhir);
+              const performanceIndicatorLabel = getPerformanceIndicatorLabel(
+                record.nilaiAkhir
+              );
+
               return (
                 <div className="text-center space-y-1">
-                  <div className="text-xs">{indicator.description}</div>
+                  <div
+                    className={`text-sm px-2 py-1 rounded border ${performanceIndicatorLabel.color}`}
+                  >
+                    {indicator.description}
+                  </div>
                 </div>
               );
             } else {
-              return <div className="text-center text-gray-400 text-xs">-</div>;
+              return <div className="text-center text-gray-400 text-sm">-</div>;
             }
           },
         },
-        {
-          title: "Lulus",
-          dataIndex: "kelulusan",
-          key: "kelulusan",
-          width: isMobile ? 40 : 60,
-          className: "text-center text-xs",
-          onHeaderCell: () => ({
-            style: { textAlign: "center" },
-          }),
-          render: (value: string, record: Student) => {
-            if (record.key === "average") {
-              return (
-                <div className="text-center font-semibold text-xs py-1 bg-pink-100 rounded">
-                  Avg
-                </div>
-              );
-            }
+        // {
+        //   title: "Lulus",
+        //   dataIndex: "kelulusan",
+        //   key: "kelulusan",
+        //   width: isMobile ? 40 : 60,
+        //   className: "text-center text-sm",
+        //   onHeaderCell: () => ({
+        //     style: { textAlign: "center" },
+        //   }),
+        //   render: (value: string, record: Student) => {
+        //     if (record.key === "average") {
+        //       return (
+        //         <div className="text-center font-semibold text-sm py-1 bg-gray-100 rounded">
+        //           Avg
+        //         </div>
+        //       );
+        //     }
 
-            if (hasAllScores(record)) {
-              return (
-                <Tag
-                  color={value === "Lulus" ? "green" : "red"}
-                  className="text-xs"
-                >
-                  {value === "Lulus" ? "✓" : "✗"}
-                </Tag>
-              );
-            } else {
-              return <div className="text-center text-gray-400 text-xs">-</div>;
-            }
-          },
-        },
+        //     if (hasAllScores(record)) {
+        //       return (
+        //         <Tag
+        //           color={value === "Lulus" ? "green" : "red"}
+        //           className="text-sm"
+        //         >
+        //           {value === "Lulus" ? "✓" : "✗"}
+        //         </Tag>
+        //       );
+        //     } else {
+        //       return <div className="text-center text-gray-400 text-sm">-</div>;
+        //     }
+        //   },
+        // },
       ],
     } as any);
 
@@ -1568,14 +1811,14 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
       no: 0,
       nim: "",
       name: "Rata-rata Kelas",
-      nilaiAkhir: calculateAverage("nilaiAkhir"),
+      nilaiAkhir: calculateFieldAverage("nilaiAkhir"),
       nilaiMutu: "-",
       kelulusan: "-",
     } as Student;
 
     // Add dynamic assessment type averages
     assessmentTypes.forEach((type) => {
-      averageRow[type] = calculateAverage(type);
+      averageRow[type] = calculateFieldAverage(type);
     });
 
     return [...students, averageRow];
@@ -1614,9 +1857,9 @@ export const EnhancedStudentsGradesTable: React.FC<Props> = ({
         size="small"
         scroll={{ x: "max-content", y: 500 }}
         rowClassName={(record) =>
-          record.key === "average" ? "bg-pink-50 font-medium" : ""
+          record.key === "average" ? "bg-gray-50 font-medium" : ""
         }
-        className="text-xs"
+        className="text-sm"
       />
     </div>
   );

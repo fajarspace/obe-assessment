@@ -14,10 +14,6 @@ const Profile = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    nidn: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
     prodi: {
       type: DataTypes.STRING,
       allowNull: false,

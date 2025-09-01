@@ -49,6 +49,16 @@ const { Option } = Select;
 const { useBreakpoint } = Grid;
 const { Panel } = Collapse;
 
+// Program Studi options
+const PRODI_OPTIONS = [
+  { value: "Teknik Informatika", label: "Teknik Informatika" },
+  { value: "Teknik Industri", label: "Teknik Industri" },
+  { value: "Teknik Sipil", label: "Teknik Sipil" },
+  { value: "Teknik Lingkungan", label: "Teknik Lingkungan" },
+  { value: "Teknik Arsitektur", label: "Teknik Arsitektur" },
+  { value: "Teknologi Hasil Pertanian", label: "Teknologi Hasil Pertanian" },
+];
+
 const MKManagement: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -196,7 +206,11 @@ const MKManagement: React.FC = () => {
     setModalMode("create");
     setEditingMK(null);
     form.resetFields();
-    form.setFieldsValue({ sks: 3, jenis: "MK Program Studi" });
+    form.setFieldsValue({
+      sks: 3,
+      jenis: "MK Program Studi",
+      prodi: undefined, // Reset prodi to undefined for better UX
+    });
     setSelectedCPLs([]);
     setSelectedCPMKs([]);
     setIsModalVisible(true);
@@ -282,22 +296,6 @@ const MKManagement: React.FC = () => {
     }
   };
 
-  // const handleCPLSelection = (cplId: number, checked: boolean) => {
-  //   if (checked) {
-  //     setSelectedCPLs((prev) => [...prev, cplId]);
-  //   } else {
-  //     setSelectedCPLs((prev) => prev.filter((id) => id !== cplId));
-  //   }
-  // };
-
-  // const handleCPMKSelection = (cpmkId: number, checked: boolean) => {
-  //   if (checked) {
-  //     setSelectedCPMKs((prev) => [...prev, cpmkId]);
-  //   } else {
-  //     setSelectedCPMKs((prev) => prev.filter((id) => id !== cpmkId));
-  //   }
-  // };
-
   // Desktop Table view columns
   const mkColumns = [
     {
@@ -326,6 +324,12 @@ const MKManagement: React.FC = () => {
       key: "prodi",
       width: 150,
       ellipsis: true,
+      // Add filter for prodi column
+      filters: PRODI_OPTIONS.map((option) => ({
+        text: option.label,
+        value: option.value,
+      })),
+      onFilter: (value: any, record: MK) => record.prodi === value,
     },
     {
       title: "Jenis",
@@ -338,21 +342,6 @@ const MKManagement: React.FC = () => {
         return <Tag color={color}>{jenis}</Tag>;
       },
     },
-    // {
-    //   title: "Relasi",
-    //   key: "relations",
-    //   width: 100,
-    //   render: (record: MK) => (
-    //     <Space direction="vertical" size={0}>
-    //       <Badge count={record.cpl?.length || 0} color="blue" showZero>
-    //         <span className="text-xs">CPL</span>
-    //       </Badge>
-    //       <Badge count={record.cpmk?.length || 0} color="orange" showZero>
-    //         <span className="text-xs">CPMK</span>
-    //       </Badge>
-    //     </Space>
-    //   ),
-    // },
     {
       title: "Aksi",
       key: "actions",
@@ -767,6 +756,8 @@ const MKManagement: React.FC = () => {
                     <Option value="Wajib">Wajib</Option>
                     <Option value="Pilihan">Pilihan</Option>
                     <Option value="MK Program Studi">MK Program Studi</Option>
+                    <Option value="MKDU Universitas">MKDU Universitas</Option>
+                    <Option value="MKDU Fakultas">MKDU Fakultas</Option>
                   </Select>
                 </Form.Item>
               </Col>
@@ -775,9 +766,28 @@ const MKManagement: React.FC = () => {
             <Form.Item
               name="prodi"
               label="Program Studi"
-              rules={[{ required: true, message: "Program Studi harus diisi" }]}
+              rules={[
+                { required: true, message: "Program Studi harus dipilih" },
+              ]}
             >
-              <Input placeholder="Contoh: Teknik Informatika" />
+              <Select
+                placeholder="Pilih Program Studi"
+                showSearch
+                allowClear
+                optionFilterProp="children"
+                filterOption={(input, option) =>
+                  String(option?.children ?? "")
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+                style={{ width: "100%" }}
+              >
+                {PRODI_OPTIONS.map((option) => (
+                  <Option key={option.value} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
             </Form.Item>
 
             {modalMode !== "view" && (

@@ -17,8 +17,7 @@ import {
   UserOutlined,
   AppstoreOutlined,
   LogoutOutlined,
-  SettingOutlined,
-  CustomerServiceOutlined,
+  FileExcelOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "@/context/authContext";
 import { useNavigate } from "react-router-dom";
@@ -62,10 +61,8 @@ const DashboardLayout: React.FC<Props> = ({ children }) => {
     if (!user || user.role !== "dosen") return;
 
     const isNamaEmpty = !user.profile?.nama || user.profile.nama.trim() === "";
-    const isNidnEmpty =
-      !user?.profile?.nidn || user?.profile?.nidn.trim() === "";
 
-    if (isNidnEmpty || isNamaEmpty) {
+    if (isNamaEmpty) {
       setUpdateProfileVisible(true);
     }
   };
@@ -108,56 +105,38 @@ const DashboardLayout: React.FC<Props> = ({ children }) => {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const handleNavigation = (url: string, itemId: string) => {
-    window.history.pushState({}, "", url);
-    setActiveMenu(itemId);
-    setMobileMenuOpen(false); // Close mobile menu on navigation
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
   // Menu items for different sections
   const dashboardItems = [
     {
       key: "dashboard",
       icon: <HomeOutlined />,
-      label: "Dashboard",
-      onClick: () => handleNavigation("/dashboard", "dashboard"),
+      label: <a href="/dashboard">Dashboard</a>,
     },
   ];
 
   const profilLulusanItems = [
     {
       key: "pl",
-      icon: <AppstoreOutlined />,
-      label: "PL",
-      onClick: () => handleNavigation("/dashboard/pl", "pl"),
+      label: <a href="/dashboard/pl">PL</a>,
     },
     {
       key: "cpl",
-      icon: <AppstoreOutlined />,
-      label: "CPL",
-      onClick: () => handleNavigation("/dashboard/cpl", "cpl"),
+      label: <a href="/dashboard/cpl">CPL</a>,
     },
   ];
 
   const mataKuliahItems = [
     {
       key: "mk",
-
-      label: "MK",
-      onClick: () => handleNavigation("/dashboard/mk", "mk"),
+      label: <a href="/dashboard/mk">MK</a>,
     },
     {
       key: "cpmk",
-
-      label: "CPMK",
-      onClick: () => handleNavigation("/dashboard/cpmk", "cpmk"),
+      label: <a href="/dashboard/cpmk">CPMK</a>,
     },
     {
       key: "subcpmk",
-
-      label: "Sub-CPMK",
-      onClick: () => handleNavigation("/dashboard/subcpmk", "SubCPMK"),
+      label: <a href="/dashboard/subcpmk">Sub-CPMK</a>,
     },
   ];
 
@@ -165,8 +144,12 @@ const DashboardLayout: React.FC<Props> = ({ children }) => {
     {
       key: "penilaian",
       icon: <AppstoreOutlined />,
-      label: "Rubrik penilaian",
-      onClick: () => handleNavigation("/dashboard/penilaian", "assessment"),
+      label: <a href="/dashboard/penilaian">Rubrik penilaian</a>,
+    },
+    {
+      key: "penilaianexcel",
+      icon: <FileExcelOutlined />,
+      label: <a href="#">Template Excel</a>,
     },
   ];
 
@@ -277,16 +260,14 @@ const DashboardLayout: React.FC<Props> = ({ children }) => {
             inlineCollapsed={collapsed}
           />
         </div>
+        <div className="mt-auto p-4">
+          <Text type="secondary" className="text-sm">
+            Beta version.
+          </Text>
+        </div>
       </div>
 
       {/* Footer */}
-      {!collapsed && (
-        <div className="mt-auto p-4 border-t">
-          <Text type="secondary" className="text-sm">
-            Beta ver.
-          </Text>
-        </div>
-      )}
     </div>
   );
 
@@ -309,7 +290,7 @@ const DashboardLayout: React.FC<Props> = ({ children }) => {
           }}
         >
           {/* Header */}
-          <div className="h-16 flex items-center px-6 border-b bg-yellow-300">
+          <div className="h-16 flex items-center px-6 bg-yellow-300">
             <Space align="center">
               <AppstoreOutlined className="text-xl" />
               {!collapsed && (

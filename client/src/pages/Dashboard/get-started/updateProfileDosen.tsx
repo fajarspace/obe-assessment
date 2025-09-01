@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Drawer, Input, Button, message, Steps, Select, Avatar } from "antd";
-import { UserOutlined, BookOutlined, IdcardOutlined } from "@ant-design/icons";
+import { UserOutlined, BookOutlined } from "@ant-design/icons";
 import axios, { type AxiosResponse } from "axios";
 import { useAuth } from "@/context/authContext";
 import { prodiOptions } from "@/types/types";
@@ -14,7 +14,6 @@ interface UserProfile {
   role: string;
   profile?: {
     nama?: string;
-    nidn?: string;
     prodi?: string;
   };
 }
@@ -23,13 +22,7 @@ interface UserProfile {
 interface UpdateProfileRequest {
   userId?: string;
   nama?: string;
-  nidn?: string;
   prodi?: string;
-}
-
-// Interface untuk Auth Profile Request
-interface AuthProfileRequest {
-  phone_number?: string;
 }
 
 // Interface untuk Update Profile Response
@@ -38,12 +31,9 @@ interface UpdateProfileResponse {
   user: UserProfile;
 }
 
-// Interface untuk Form Errors
 interface FormErrors {
   nama?: string;
-  nidn?: string;
   prodi?: string;
-  phone_number?: string;
 }
 
 interface UpdateProfileProps {
@@ -60,9 +50,7 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
   const [errors, setErrors] = useState<FormErrors>({});
   const [formData, setFormData] = useState({
     nama: "",
-    nidn: "",
     prodi: "",
-    phone_number: "",
   });
   const [step, setStep] = useState<number>(1);
 
@@ -71,27 +59,12 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
     if (visible && user) {
       setFormData({
         nama: user.profile?.nama || "",
-        nidn: user.profile?.nidn || "",
         prodi: user.profile?.prodi || "",
-        phone_number: user.phone_number || "",
       });
       setStep(1);
       setErrors({});
     }
   }, [visible, user]);
-
-  // Function untuk validasi NIDN
-  const validateNIM = (value: string): string => {
-    if (!value) return "";
-
-    // NIDN biasanya 8-15 digit
-    const nimRegex = /^[0-9]{8,15}$/;
-    if (!nimRegex.test(value)) {
-      return "NIDN harus berupa angka 8-15 digit";
-    }
-
-    return "";
-  };
 
   // Function untuk validasi form
   const validateForm = (): boolean => {
@@ -104,20 +77,10 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
       newErrors.nama = "Nama minimal 3 karakter";
     }
 
-    // Validasi NIDN
-    if (!formData.nidn.trim()) {
-      newErrors.nidn = "NIDN wajib diisi";
-    } else {
-      const nimError = validateNIM(formData.nidn);
-      if (nimError) newErrors.nidn = nimError;
-    }
-
     // Validasi prodi
     if (!formData.prodi.trim()) {
       newErrors.prodi = "Program Studi wajib dipilih";
     }
-
-    // Validasi phone_number
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -139,27 +102,10 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
     setLoading(true);
 
     try {
-      // First API call - Update auth profile (phone number)
-      const authUpdateData: AuthProfileRequest = {
-        phone_number: formData.phone_number.trim(),
-      };
-
-      await axios.patch(
-        `${process.env.VITE_API_URI}/auth/profile`,
-        authUpdateData,
-        {
-          withCredentials: true,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
       // Second API call - Create profile data
       const updateData: UpdateProfileRequest = {
         userId: user?.id,
         nama: formData.nama.trim(),
-        nidn: formData.nidn.trim(),
         prodi: formData.prodi.trim(),
       };
 
@@ -178,7 +124,7 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
         message.success("Profil berhasil dibuat!");
         window.location.reload();
         onClose();
-        setFormData({ nama: "", nidn: "", prodi: "", phone_number: "" });
+        setFormData({ nama: "", prodi: "" });
         setErrors({});
       }
     } catch (error) {
@@ -200,12 +146,8 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
   const isProfileIncomplete = user
     ? !user.profile?.nama ||
       user.profile.nama.trim() === "" ||
-      !user.profile?.nidn ||
-      user.profile.nidn.trim() === "" ||
       !user.profile?.prodi ||
-      user.profile.prodi.trim() === "" ||
-      !user.phone_number ||
-      user.phone_number.trim() === ""
+      user.profile.prodi.trim() === ""
     : false;
 
   const handleClose = () => {
@@ -214,7 +156,7 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
       return;
     }
     onClose();
-    setFormData({ nama: "", nidn: "", prodi: "", phone_number: "" });
+    setFormData({ nama: "", prodi: "" });
     setErrors({});
     setStep(1);
   };
@@ -308,30 +250,6 @@ const UpdateProfileDosen: React.FC<UpdateProfileProps> = ({
                       {errors.nama && (
                         <p className="text-red-500 text-sm mt-1">
                           {errors.nama}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* NIDN */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        NIDN <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        prefix={<IdcardOutlined className="text-gray-400" />}
-                        placeholder="Masukkan NIDN"
-                        size="large"
-                        value={formData.nidn}
-                        onChange={(e) =>
-                          handleInputChange("nidn", e.target.value)
-                        }
-                        status={errors.nidn ? "error" : ""}
-                        maxLength={15}
-                        className="w-full rounded-lg"
-                      />
-                      {errors.nidn && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.nidn}
                         </p>
                       )}
                     </div>

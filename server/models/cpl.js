@@ -19,7 +19,6 @@ const CPL = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: false,
     },
-    // Hapus mkId karena sekarang many-to-many melalui junction table
     userId: {
       type: DataTypes.UUID,
       allowNull: false,

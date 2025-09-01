@@ -7,13 +7,20 @@ const subcpmkController = {
     try {
       const userId = req.user?.id;
 
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized: userId tidak ditemukan",
+        });
+      }
+
       const subcpmks = await SUBCPMK.findAll({
-        where: { userId },
+        where: { userId }, // filter berdasarkan user login
         include: [
           {
             model: CPMK,
             as: "cpmk",
-            through: { attributes: [] }, // Hide junction table attributes
+            through: { attributes: [] }, // sembunyikan atribut pivot
           },
         ],
       });
